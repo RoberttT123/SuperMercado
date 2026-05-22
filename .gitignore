@@ -1,0 +1,14 @@
+# Entornos virtuales (tu carpeta venv pesa mucho y no debe subirse)
+venv/
+.env
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Datos de la base de datos local (si tuvieras)
+*.db

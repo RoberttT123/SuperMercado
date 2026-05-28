@@ -1,12 +1,20 @@
 """
 pages/1_Control_de_Caja.py
 """
+# 🔒 BARRERA DE SEGURIDAD
+
 import streamlit as st
 import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 st.set_page_config(page_title="Caja · Almacén Gloria", page_icon="💵", layout="wide")
 
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.switch_page("main.py")
+
+if st.session_state.get("role") != "admin":
+    st.error("Acceso denegado. Esta sección es solo para administradores.")
+    st.stop()
 from src.utils.sidebar import render_sidebar
 from src.services.caja_service import (
     get_caja_abierta, abrir_caja, cerrar_caja, get_resumen_caja, get_historial_cajas

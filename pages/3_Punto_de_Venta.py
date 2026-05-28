@@ -2,6 +2,7 @@
 pages/3_🛒_Punto_de_Venta.py
 LA PANTALLA CRÍTICA — Escaneo, carrito y cobro rápido.
 """
+# 🔒 BARRERA DE SEGURIDAD
 
 import streamlit as st
 import sys, os
@@ -21,7 +22,12 @@ st.set_page_config(
     layout     = "wide",
 )
 
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.switch_page("main.py")
 
+if st.session_state.get("role") != "admin":
+    st.error("Acceso denegado. Esta sección es solo para administradores.")
+    st.stop()
 render_sidebar()
 st.markdown("""
 <style>

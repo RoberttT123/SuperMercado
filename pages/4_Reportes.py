@@ -2,6 +2,7 @@
 pages/4_📊_Reportes.py
 Analítica de ventas, ganancias y productos más vendidos.
 """
+# 🔒 BARRERA DE SEGURIDAD
 
 import streamlit as st
 import pandas as pd
@@ -17,7 +18,12 @@ from src.utils.helpers              import fmt_bs, fmt_fecha_corta, now_bolivia
 
 # ── Config ────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Reportes · Almacén Gloria", page_icon="📊", layout="wide")
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.switch_page("main.py")
 
+if st.session_state.get("role") != "admin":
+    st.error("Acceso denegado. Esta sección es solo para administradores.")
+    st.stop()
 
 render_sidebar()
 st.markdown("""

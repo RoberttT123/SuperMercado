@@ -5,19 +5,23 @@ Analítica de ventas, ganancias y productos más vendidos.
 # 🔒 BARRERA DE SEGURIDAD
 
 import streamlit as st
+st.set_page_config(page_title="Reportes · Almacén Gloria", page_icon="📊", layout="wide")
+
+# ── Luego todos los demás imports ──
 import pandas as pd
 import sys, os
 from datetime import date, timedelta
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-
-from src.utils.sidebar import render_sidebar
-from src.services.ventas_service    import get_ventas_por_rango, get_resumen_ventas, get_productos_mas_vendidos
+from src.utils.sidebar           import render_sidebar
+from src.services.ventas_service import get_ventas_por_rango, get_resumen_ventas, get_productos_mas_vendidos
 from src.services.inventario_service import get_stock_critico, get_todos_productos
-from src.utils.helpers              import fmt_bs, fmt_fecha_corta, now_bolivia
+from src.utils.helpers           import fmt_bs, fmt_fecha_corta, now_bolivia, generar_pdf_nota_venta
+from logic.pos_logica            import obtener_detalle_venta
+
 
 # ── Config ────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Reportes · Almacén Gloria", page_icon="📊", layout="wide")
 if "logged_in" not in st.session_state or not st.session_state.logged_in:
     st.switch_page("main.py")
 
@@ -144,13 +148,14 @@ with col_gan:
 with col_pago:
     st.subheader("💳 Ingresos por método de pago")
     metodos_df = pd.DataFrame({
-        "Método":  ["💵 Efectivo", "📱 QR / Transferencia", "💳 Tarjeta"],
-        "Monto":   [resumen["efectivo"], resumen["qr"], resumen["tarjeta"]],
+        "Método": ["💵 Efectivo", "📱 QR / Transferencia", "💳 Tarjeta"],
+        "Monto":  [
+            fmt_bs(resumen["efectivo"]),
+            fmt_bs(resumen["qr"]),
+            fmt_bs(resumen["tarjeta"]),
+        ],
     })
-    st.dataframe(
-        metodos_df.style.format({"Monto": lambda x: fmt_bs(x)}),
-        use_container_width=True, hide_index=True
-    )
+    st.dataframe(metodos_df, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
@@ -162,18 +167,79 @@ with tab_ventas:
     if not ventas_lista:
         st.info("No hay ventas en el período seleccionado.")
     else:
-        filas = []
-        for v in ventas_lista:
-            filas.append({
-                "Nº Venta":    v["numero_venta"],
-                "Fecha":       fmt_fecha_corta(v["fecha"]),
-                "Total":       fmt_bs(v["total"]),
-                "Descuento":   fmt_bs(v["descuento"]),
-                "Método":      v["metodo_pago"].title(),
-                "Estado":      "✅ Completada" if v["estado"] == "completada" else "❌ Anulada",
-            })
-        st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
-        st.caption(f"{len(ventas_lista)} venta(s) en el período.")
+        # ── Tabla + Acciones en columnas ──
+        col_tabla, col_acciones = st.columns([3, 1])
+
+        with col_tabla:
+            filas = []
+            for v in ventas_lista:
+                filas.append({
+                    "Nº Venta":  v["numero_venta"],
+                    "Fecha":     fmt_fecha_corta(v["fecha"]),
+                    "Total":     fmt_bs(v["total"]),
+                    "Descuento": fmt_bs(v["descuento"]),
+                    "Método":    v["metodo_pago"].title(),
+                    "Estado":    "✅ Completada" if v["estado"] == "completada" else "❌ Anulada",
+                })
+            st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+            st.caption(f"{len(ventas_lista)} venta(s) en el período.")
+
+        with col_acciones:
+            st.markdown("**Acciones**")
+            opciones = {v["numero_venta"]: v for v in ventas_lista}
+            seleccion = st.selectbox(
+                "Seleccionar venta",
+                options=list(opciones.keys()),
+                label_visibility="collapsed",
+            )
+
+            if seleccion:
+                v_sel = opciones[seleccion]
+                items, nombre = obtener_detalle_venta(v_sel["id"])
+                cliente_pdf   = v_sel.get("cliente") or nombre or "Consumidor final"
+
+                if st.button("🔍 Ver detalle", use_container_width=True, type="primary"):
+                    st.session_state["detalle_reporte"] = {
+                        "items":   items,
+                        "venta":   v_sel,
+                        "cliente": cliente_pdf,
+                    }
+
+                if items:
+                    pdf_bytes = generar_pdf_nota_venta(
+                        items, float(v_sel["total"]),
+                        v_sel["numero_venta"], cliente_pdf,
+                    )
+                    st.download_button(
+                        "📥 Descargar PDF",
+                        data=pdf_bytes,
+                        file_name=f"nota_{v_sel['numero_venta']}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key=f"pdf_reporte_{v_sel['id']}",
+                    )
+
+        # ✅ Detalle FUERA de las columnas para evitar React #185
+        if st.session_state.get("detalle_reporte"):
+            dr = st.session_state.detalle_reporte
+            st.markdown("---")
+            st.markdown(f"**Detalle — {dr['venta']['numero_venta']} | Cliente: {dr['cliente']}**")
+            if dr["items"]:
+                st.dataframe(
+                    pd.DataFrame([
+                        {
+                            "Producto":    i["nombre"],
+                            "Cantidad":    i["cantidad"],
+                            "P. Unitario": fmt_bs(i["precio_venta"]),
+                            "Subtotal":    fmt_bs(i["precio_venta"] * i["cantidad"]),
+                        }
+                        for i in dr["items"].values()
+                    ]),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.caption("Sin detalle disponible.")
 
 with tab_top:
     st.subheader("🏆 Productos más vendidos")
@@ -181,22 +247,19 @@ with tab_top:
     if not top_prods:
         st.info("No hay datos de ventas para el período.")
     else:
-        df_top = pd.DataFrame(top_prods)
-        df_top["ingresos"]  = df_top["ingresos"].apply(fmt_bs)
-        df_top["ganancia"]  = df_top["ganancia"].apply(fmt_bs)
-        df_top = df_top.rename(columns={
-            "nombre":   "Producto",
-            "codigo":   "Código",
-            "unidades": "Unidades",
-            "ingresos": "Ingresos",
-            "ganancia": "Ganancia",
-        })
-        st.dataframe(
-            df_top[["Producto", "Código", "Unidades", "Ingresos", "Ganancia"]],
-            use_container_width=True, hide_index=True
-        )
+        # ✅ Formato aplicado antes de crear el DataFrame, sin .style ni .apply
+        filas_top = [
+            {
+                "Producto": p["nombre"],
+                "Código":   p["codigo"],
+                "Unidades": p["unidades"],
+                "Ingresos": fmt_bs(p["ingresos"]),
+                "Ganancia": fmt_bs(p["ganancia"]),
+            }
+            for p in top_prods
+        ]
+        st.dataframe(pd.DataFrame(filas_top), use_container_width=True, hide_index=True)
 
-        # Gráfico simple de barras con Streamlit
         st.subheader("📊 Unidades vendidas")
         chart_data = pd.DataFrame({
             "Producto": [p["nombre"][:20] for p in top_prods[:10]],

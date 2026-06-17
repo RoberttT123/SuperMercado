@@ -6,6 +6,10 @@ Herramientas reutilizables: moneda, fechas, generación de códigos.
 from datetime import datetime, timezone, timedelta
 import random
 import string
+
+from fpdf import FPDF
+from fpdf.enums import XPos, YPos
+
 from dateutil import parser  # Importamos el parser robusto
 
 # Zona horaria de Bolivia (UTC-4)
@@ -100,3 +104,96 @@ def calcular_margen(precio_compra: float, precio_venta: float) -> float:
 def calcular_cambio(total: float, recibido: float) -> float:
     """Calcula el cambio. Retorna 0 si no alcanza."""
     return max(0.0, recibido - total)
+
+# ─── PDF ─────────────────────────────────────────────────────────────────────
+def generar_pdf_nota_venta(carrito: dict, total: float, numero: str, nombre_cliente: str) -> bytes:
+    pdf = FPDF(format="A5")
+    pdf.add_page()
+    pdf.set_margins(12, 12, 12)
+
+    ancho      = pdf.w - 24
+    col_prod   = ancho * 0.45
+    col_cant   = ancho * 0.15
+    col_precio = ancho * 0.20
+    col_sub    = ancho * 0.20
+
+    # Encabezado naranja
+    pdf.set_fill_color(255, 107, 43)
+    pdf.rect(0, 0, pdf.w, 28, style="F")
+    pdf.set_y(6)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 8, "ALMACEN GLORIA", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 6, "Nota de Venta", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+
+    # Info
+    pdf.set_y(32)
+    pdf.set_text_color(60, 60, 60)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(ancho / 2, 6, f"N Nota: {numero}", new_x=XPos.RIGHT, new_y=YPos.TOP)
+    pdf.cell(ancho / 2, 6, f"Fecha: {now_bolivia().strftime('%d/%m/%Y %H:%M')}",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="R")
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(0, 6, f"Cliente: {nombre_cliente or 'Consumidor final'}",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(3)
+
+    # Separador
+    pdf.set_draw_color(255, 107, 43)
+    pdf.set_line_width(0.5)
+    pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
+    pdf.ln(3)
+
+    # Encabezado tabla
+    pdf.set_fill_color(255, 235, 210)
+    pdf.set_text_color(150, 60, 0)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(col_prod,   7, "PRODUCTO",  border=0, fill=True)
+    pdf.cell(col_cant,   7, "CANT.",     border=0, fill=True, align="C")
+    pdf.cell(col_precio, 7, "P.UNIT",    border=0, fill=True, align="R")
+    pdf.cell(col_sub,    7, "SUBTOTAL",  border=0, fill=True, align="R",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+
+    # Filas
+    pdf.set_text_color(40, 40, 40)
+    pdf.set_font("Helvetica", "", 8)
+    fill = False
+    for item in carrito.values():
+        sub = float(item["cantidad"]) * float(item["precio_venta"])
+        pdf.set_fill_color(252, 248, 244) if fill else pdf.set_fill_color(255, 255, 255)
+        pdf.cell(col_prod,   6, str(item["nombre"])[:30],                  border=0, fill=True)
+        pdf.cell(col_cant,   6, str(item["cantidad"]),                     border=0, fill=True, align="C")
+        pdf.cell(col_precio, 6, f"Bs. {float(item['precio_venta']):.2f}", border=0, fill=True, align="R")
+        pdf.cell(col_sub,    6, f"Bs. {sub:.2f}",                         border=0, fill=True, align="R",
+                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        fill = not fill
+
+    pdf.ln(2)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.3)
+    pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
+    pdf.ln(3)
+
+    # Total
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(255, 107, 43)
+    pdf.cell(ancho - col_sub, 8, "TOTAL A PAGAR:", align="R")
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(col_sub, 8, f"Bs. {total:.2f}", align="R",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+    pdf.ln(6)
+
+    # Pie
+    pdf.set_draw_color(255, 107, 43)
+    pdf.set_line_width(0.5)
+    pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(0, 5, "Gracias por su compra!", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.cell(0, 5, "Almacen Gloria - su tienda de confianza",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+
+    return bytes(pdf.output())

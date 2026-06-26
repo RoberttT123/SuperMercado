@@ -1,6 +1,0 @@
-streamlit
-supabase
-websockets
-python-dotenv
-pandas
-fpdf2

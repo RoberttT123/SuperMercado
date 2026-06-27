@@ -109,11 +109,11 @@
                 <input v-model="formNuevo.nombre" type="text" required placeholder="Ej: Arroz Superior 1kg" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
               </div>
               <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">🏷️ Categoría</label>
-                <select v-model="formNuevo.categoria" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
-                  <option value="">— Sin categoría —</option>
-                  <option v-for="cat in categorias" :key="cat.id" :value="cat.nombre">{{ cat.nombre }}</option>
-                </select>
+              <label class="block text-sm font-bold text-gray-700 mb-1">🏷️ Categoría</label>
+              <select v-model="formNuevo.categoria_id" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+                <option :value="null">— Sin categoría —</option>
+                <option v-for="cat in categorias" :key="cat.id" :value="cat.id">{{ cat.nombre }}</option>
+              </select>
               </div>
               <div>
                 <label class="block text-sm font-bold text-gray-700 mb-1">📐 Unidad de medida</label>
@@ -165,16 +165,29 @@
         </form>
       </div>
 
-      <div v-if="activeTab === 'editar'">
-        <h2 class="text-lg font-bold text-[#FF6B2B] mb-4">Editar Producto Existente</h2>
-        
-        <div class="mb-6">
-          <label class="block text-sm font-bold text-gray-700 mb-1">🔍 Buscar o seleccionar producto a editar</label>
-          <select v-model="productoAEditarId" @change="cargarDatosEdicion" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
-            <option :value="null">-- Seleccione un producto --</option>
-            <option v-for="p in productos" :key="p.id" :value="p.id">{{ p.codigo }} — {{ p.nombre }}</option>
-          </select>
-        </div>
+          <div v-if="activeTab === 'editar'">
+            <h2 class="text-lg font-bold text-[#FF6B2B] mb-4">Editar Producto Existente</h2>
+            
+            <div class="mb-6 space-y-3">
+              <div>
+                  <label class="block text-sm font-bold text-gray-700 mb-1">🔍 Buscar producto para editar</label>
+                  <input 
+                      v-model="busquedaEdicion" 
+                      type="text" 
+                      placeholder="Escribe el nombre o código..." 
+                      class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]"
+                  >
+              </div>
+
+              <div>
+                  <select v-model="productoAEditarId" @change="cargarDatosEdicion" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+                      <option :value="null">-- Selecciona de la lista ({{ productosFiltradosParaEditar.length }} encontrados) --</option>
+                      <option v-for="p in productosFiltradosParaEditar" :key="p.id" :value="p.id">
+                          {{ p.codigo }} — {{ p.nombre }}
+                      </option>
+                  </select>
+              </div>
+            </div>
 
         <div v-if="formEditar" class="border-t border-gray-100 pt-6">
           <form @submit.prevent="actualizarProducto" class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -184,11 +197,11 @@
                 <input v-model="formEditar.nombre" type="text" required class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
               </div>
               <div>
-                <label class="block text-sm font-bold text-gray-700 mb-1">Categoría</label>
-                <select v-model="formEditar.categoria" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
-                  <option value="">— Sin categoría —</option>
-                  <option v-for="cat in categorias" :key="cat.id" :value="cat.nombre">{{ cat.nombre }}</option>
-                </select>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Categoría</label>
+              <select v-model="formEditar.categoria_id" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+                <option :value="null">— Sin categoría —</option>
+                <option v-for="cat in categorias" :key="cat.id" :value="cat.id">{{ cat.nombre }}</option>
+              </select>
               </div>
             </div>
             
@@ -406,7 +419,17 @@ const actualizarProducto = async () => {
     loading.value = false
   }
 }
+// Agrega esto junto a tus otras variables ref
+const busquedaEdicion = ref('')
 
+// Agrega este computed para filtrar la lista de productos en el select
+const productosFiltradosParaEditar = computed(() => {
+  const term = busquedaEdicion.value.toLowerCase()
+  return productos.value.filter(p => 
+    p.nombre.toLowerCase().includes(term) || 
+    p.codigo.toLowerCase().includes(term)
+  )
+})
 // --- COMPRAS ---
 const compraTemp = ref({ productoId: null, cantidad: 1, precio: 0 })
 const carritoCompra = ref([])

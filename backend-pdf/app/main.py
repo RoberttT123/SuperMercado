@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.routers import auth, inventario, ventas, reportes
+from app.routers import auth, inventario, ventas,categoria, reportes,producto
 
 app = FastAPI()
 
@@ -23,5 +23,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 app.include_router(auth.router)
 app.include_router(inventario.router)
+app.include_router(producto.router)
+app.include_router(categoria.router)
 app.include_router(ventas.router)
 app.include_router(reportes.router)

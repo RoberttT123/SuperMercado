@@ -60,15 +60,12 @@
     </div>
   </div>
 </template>
-
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/authStore' // Importamos el store real
+import authService from '@/services/authService' // <-- Importa tu servicio
 
 const router = useRouter()
-const authStore = useAuthStore()
-
 const username = ref('')
 const password = ref('')
 const isLoading = ref(false)
@@ -82,24 +79,14 @@ const handleLogin = async () => {
   errorMessage.value = ''
 
   try {
-    // AQUÍ ES DONDE VUE HABLARÁ CON FASTAPI
-    // simulamos la llamada con un timeout:
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // Simulando una validación (luego cambiarás esto por la validación real de tu base de datos)
-    if (username.value === 'admin' && password.value === 'admin') {
-      
-      // 1. Guardamos la "llave" (token) en el navegador
-      localStorage.setItem('token_gloria', 'aqui_va_el_token_secreto_de_fastapi')
-      localStorage.setItem('user_role', 'admin') // Guardas el rol para tus validaciones
-      
-      // 2. Lo enviamos al dashboard
-      router.push('/')
-    } else {
-      errorMessage.value = 'Usuario o contraseña incorrectos'
-    }
+    // Llama al backend real a través de tu servicio
+    await authService.login(username.value, password.value)
+    
+    // Si no lanza error, el authService ya guardó el token y el user en localStorage
+    router.push('/')
   } catch (error) {
-    errorMessage.value = 'Error al conectar con el servidor'
+    // Muestra el mensaje de error que viene del backend o de Axios
+    errorMessage.value = typeof error === 'string' ? error : 'Error al conectar con el servidor'
   } finally {
     isLoading.value = false
   }

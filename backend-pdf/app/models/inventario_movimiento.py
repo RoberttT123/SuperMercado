@@ -1,3 +1,6 @@
+ya tenia uno en mi back que se llama inventari_movimiento.py
+
+```python
 from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, DateTime, func, Text
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -17,3 +20,4 @@ class InventarioMovimiento(Base):
 
     # Relación: Acceder a producto.movimientos para ver el historial
     producto = relationship("Producto", backref="movimientos")
+```

@@ -17,6 +17,10 @@ class Producto(Base):
     precio_venta = Column(Numeric, default=0)
     stock = Column(Integer, default=0)
     stock_minimo = Column(Integer, default=5)
+    
+    # ¡Columna agregada según tu esquema de base de datos original!
+    unidad = Column(String, default="unidad") 
+    
     activo = Column(Boolean, default=True)
     
     created_at = Column(DateTime, default=func.now())
@@ -24,3 +28,12 @@ class Producto(Base):
 
     # Relación: El producto pertenece a una categoría
     categoria = relationship("Categoria", back_populates="productos")
+    
+    # -------------------------------------------------------------------------
+    # FUTURAS RELACIONES (Descomenta estas líneas a medida que crees los 
+    # modelos de ventas, compras e inventario para mantener todo conectado)
+    # -------------------------------------------------------------------------
+    # detalles_ventas = relationship("DetalleVenta", back_populates="producto")
+    # detalles_compras = relationship("DetalleCompra", back_populates="producto")
+    # detalles_pedidos = relationship("DetallePedido", back_populates="producto")
+    # movimientos = relationship("InventarioMovimiento", back_populates="producto")

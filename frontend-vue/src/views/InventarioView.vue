@@ -1,5 +1,7 @@
 <template>
-  <div class="p-8 pl-10 max-w-full">
+  <div class="p-8 pl-10 max-w-full"><!-- Loading y error -->
+<div v-if="loading" class="text-center py-4 text-[#FF6B2B] font-bold">⏳ Cargando...</div>
+<div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg">{{ error }}</div>
     <div class="mb-6 border-b border-[#FFE0CC] pb-4">
       <h1 class="text-3xl font-black text-[#FF6B2B] mb-1">📦 Inventario</h1>
       <p class="text-gray-500 text-sm">Gestión de productos, stock y registro de compras.</p>
@@ -292,113 +294,135 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '@/stores/authStore';
+import { ref, computed, watch, onMounted } from 'vue'
+import inventarioService from '@/services/inventarioService'
 
-const authStore = useAuthStore();
-import { ref, computed, watch } from 'vue'
-
-// --- ESTADO GLOBAL ---
 const activeTab = ref('lista')
+const loading = ref(false)
+const error = ref(null)
 
-// --- DATOS SIMULADOS ---
-const categorias = ref([
-  { id: 1, nombre: 'Abarrotes' },
-  { id: 2, nombre: 'Lácteos' },
-  { id: 3, nombre: 'Bebidas' },
-  { id: 4, nombre: 'Limpieza' }
-])
+// --- DATOS REALES ---
+const categorias = ref([])
+const productos = ref([])
 
-const productos = ref([
-  { id: 1, codigo: '750123456001', nombre: 'Arroz Grano de Oro 1kg', categoria: 'Abarrotes', precio_compra: 8.0, precio_venta: 10.0, stock: 45, stock_minimo: 10, unidad: 'bolsa' },
-  { id: 2, codigo: '750123456002', nombre: 'Leche Pil 1L', categoria: 'Lácteos', precio_compra: 6.5, precio_venta: 7.5, stock: 8, stock_minimo: 15, unidad: 'litro' },
-  { id: 3, codigo: '750123456003', nombre: 'Coca Cola 2.5L', categoria: 'Bebidas', precio_compra: 11.0, precio_venta: 14.0, stock: 24, stock_minimo: 12, unidad: 'unidad' },
-  { id: 4, codigo: '750123456004', nombre: 'Detergente OMO 1kg', categoria: 'Limpieza', precio_compra: 15.0, precio_venta: 18.0, stock: 5, stock_minimo: 10, unidad: 'bolsa' },
-  { id: 5, codigo: '750123456005', nombre: 'Fideos Lazzaroni 400g', categoria: 'Abarrotes', precio_compra: 4.5, precio_venta: 6.0, stock: 3, stock_minimo: 15, unidad: 'bolsa' }
-])
-
-// --- TAB 1: LISTA (Filtros y Computados) ---
-const filtros = ref({
-  busqueda: '',
-  categoria: ''
+// --- CARGAR AL MONTAR ---
+onMounted(async () => {
+  await cargarDatos()
 })
+
+const cargarDatos = async () => {
+  loading.value = true
+  error.value = null
+  try {
+    const [prods, cats] = await Promise.all([
+      inventarioService.getProductos(),
+      inventarioService.getCategorias()
+    ])
+    productos.value = prods
+    categorias.value = cats
+  } catch (e) {
+    error.value = 'Error al cargar datos. Verifica tu conexión.'
+    console.error(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+// --- FILTROS ---
+const filtros = ref({ busqueda: '', categoria: '' })
 
 const productosFiltrados = computed(() => {
   return productos.value.filter(p => {
-    const coincideBusqueda = p.nombre.toLowerCase().includes(filtros.value.busqueda.toLowerCase()) || 
-                             p.codigo.includes(filtros.value.busqueda)
-    const coincideCategoria = filtros.value.categoria === '' || p.categoria === filtros.value.categoria
+    const coincideBusqueda =
+      p.nombre.toLowerCase().includes(filtros.value.busqueda.toLowerCase()) ||
+      p.codigo.includes(filtros.value.busqueda)
+    const coincideCategoria =
+      filtros.value.categoria === '' || p.categoria === filtros.value.categoria
     return coincideBusqueda && coincideCategoria
   })
 })
 
-const stockCritico = computed(() => {
-  return productos.value.filter(p => p.stock <= p.stock_minimo)
-})
+const stockCritico = computed(() =>
+  productos.value.filter(p => p.stock <= p.stock_minimo)
+)
 
 const calcularMargen = (compra, venta) => {
   if (!compra || compra === 0) return 100.0
   return (((venta - compra) / compra) * 100).toFixed(1)
 }
 
-// --- TAB 2: NUEVO PRODUCTO ---
+// --- NUEVO PRODUCTO ---
 const formNuevo = ref({
-  codigo: '', nombre: '', categoria: '', unidad: 'unidad',
-  precio_compra: 0.0, precio_venta: 0.0, stock: 0, stock_minimo: 5, descripcion: ''
+  codigo: '', nombre: '', categoria_id: null, unidad: 'unidad',
+  precio_compra: 0, precio_venta: 0, stock: 0, stock_minimo: 5, descripcion: ''
 })
 
-const guardarNuevoProducto = () => {
-  alert(`Producto "${formNuevo.value.nombre}" guardado con éxito! (Simulación)`)
-  // Resetear form
-  formNuevo.value = {
-    codigo: '', nombre: '', categoria: '', unidad: 'unidad',
-    precio_compra: 0.0, precio_venta: 0.0, stock: 0, stock_minimo: 5, descripcion: ''
+const guardarNuevoProducto = async () => {
+  loading.value = true
+  try {
+    await inventarioService.crearProducto(formNuevo.value)
+    alert(`✅ Producto "${formNuevo.value.nombre}" guardado con éxito`)
+    formNuevo.value = {
+      codigo: '', nombre: '', categoria_id: null, unidad: 'unidad',
+      precio_compra: 0, precio_venta: 0, stock: 0, stock_minimo: 5, descripcion: ''
+    }
+    await cargarDatos()
+    activeTab.value = 'lista'
+  } catch (e) {
+    alert('❌ Error al guardar: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    loading.value = false
   }
 }
 
-// --- TAB 3: EDITAR PRODUCTO ---
+// --- EDITAR PRODUCTO ---
 const productoAEditarId = ref(null)
 const formEditar = ref(null)
 
 const cargarDatosEdicion = () => {
-  if (!productoAEditarId.value) {
-    formEditar.value = null
-    return
-  }
+  if (!productoAEditarId.value) { formEditar.value = null; return }
   const prod = productos.value.find(p => p.id === productoAEditarId.value)
-  if (prod) {
-    // Clonar para no mutar directamente hasta que se guarde
-    formEditar.value = { ...prod }
+  if (prod) formEditar.value = { ...prod }
+}
+
+const actualizarProducto = async () => {
+  loading.value = true
+  try {
+    await inventarioService.actualizarProducto(formEditar.value.id, {
+      nombre: formEditar.value.nombre,
+      categoria_id: formEditar.value.categoria_id,
+      precio_compra: formEditar.value.precio_compra,
+      precio_venta: formEditar.value.precio_venta,
+      stock: formEditar.value.stock,
+      stock_minimo: formEditar.value.stock_minimo
+    })
+    alert(`✅ Producto "${formEditar.value.nombre}" actualizado`)
+    productoAEditarId.value = null
+    formEditar.value = null
+    await cargarDatos()
+  } catch (e) {
+    alert('❌ Error al actualizar: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    loading.value = false
   }
 }
 
-const actualizarProducto = () => {
-  alert(`Producto "${formEditar.value.nombre}" actualizado con éxito! (Simulación)`)
-  productoAEditarId.value = null
-  formEditar.value = null
-}
-
-// --- TAB 4: COMPRAS ---
-const compraTemp = ref({
-  productoId: null,
-  cantidad: 1,
-  precio: 0.0
-})
+// --- COMPRAS ---
+const compraTemp = ref({ productoId: null, cantidad: 1, precio: 0 })
 const carritoCompra = ref([])
 const notasCompra = ref('')
 
-// Si el usuario selecciona un producto, autocompletar el precio con el "precio_compra" actual
 watch(() => compraTemp.value.productoId, (newId) => {
   if (newId) {
     const prod = productos.value.find(p => p.id === newId)
     if (prod) compraTemp.value.precio = prod.precio_compra
   } else {
-    compraTemp.value.precio = 0.0
+    compraTemp.value.precio = 0
   }
 })
 
 const agregarAlCarrito = () => {
   if (!compraTemp.value.productoId) return
-  
   const prod = productos.value.find(p => p.id === compraTemp.value.productoId)
   carritoCompra.value.push({
     productoId: prod.id,
@@ -407,22 +431,27 @@ const agregarAlCarrito = () => {
     precio_unitario: compraTemp.value.precio,
     subtotal: compraTemp.value.cantidad * compraTemp.value.precio
   })
-  
-  // Reset formulario mini
-  compraTemp.value = { productoId: null, cantidad: 1, precio: 0.0 }
+  compraTemp.value = { productoId: null, cantidad: 1, precio: 0 }
 }
 
-const eliminarDelCarrito = (index) => {
-  carritoCompra.value.splice(index, 1)
-}
+const eliminarDelCarrito = (index) => carritoCompra.value.splice(index, 1)
 
-const totalCarrito = computed(() => {
-  return carritoCompra.value.reduce((acc, item) => acc + item.subtotal, 0)
-})
+const totalCarrito = computed(() =>
+  carritoCompra.value.reduce((acc, item) => acc + item.subtotal, 0)
+)
 
-const registrarCompra = () => {
-  alert(`Compra registrada con éxito por Bs. ${totalCarrito.value.toFixed(2)} (Simulación)`)
-  carritoCompra.value = []
-  notasCompra.value = ''
+const registrarCompra = async () => {
+  loading.value = true
+  try {
+    const result = await inventarioService.registrarCompra(carritoCompra.value, notasCompra.value)
+    alert(`✅ Compra ${result.numero_compra} registrada por Bs. ${result.total.toFixed(2)}`)
+    carritoCompra.value = []
+    notasCompra.value = ''
+    await cargarDatos()
+  } catch (e) {
+    alert('❌ Error al registrar compra: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    loading.value = false
+  }
 }
 </script>

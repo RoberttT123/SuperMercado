@@ -1,3 +1,33 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* src/assets/main.css */
+@import "tailwindcss";
+
+/* Tus componentes personalizados ahora van después de la importación */
+@layer components {
+  
+  .app-card {
+    @apply bg-white border border-[#FFE0CC] rounded-2xl p-6 shadow-sm transition-all duration-300;
+  }
+  
+  .app-card:hover {
+    @apply -translate-y-1 border-[#FF6B2B] shadow-lg;
+  }
+
+  .btn-primary {
+    @apply bg-[#FFF3EE] border border-[#FFB38A] text-[#E85510] font-bold py-2.5 px-4 rounded-lg 
+           transition-all duration-200 flex items-center justify-center hover:bg-[#FF6B2B] hover:text-white hover:border-[#FF6B2B] hover:shadow-md;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] focus:ring-2 focus:ring-[#FF6B2B]/20 transition-all;
+  }
+
+  .section-title {
+    @apply text-2xl font-black text-[#2A1A0A] mb-6 tracking-tight;
+  }
+}
+
+/* Scrollbar global */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #FFCCB3; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #FF6B2B; }

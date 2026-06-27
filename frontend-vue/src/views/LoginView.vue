@@ -1,106 +1,107 @@
 <template>
-  <div class="flex items-center justify-center min-h-screen bg-gray-50">
-    <div class="p-8 bg-white rounded-2xl shadow-xl w-full max-w-sm border border-gray-100">
-      <h1 class="text-3xl font-bold text-center mb-2 text-orange-600">Almacén Gloria</h1>
-      <p class="text-center text-gray-500 mb-8">Inicia sesión para continuar</p>
+  <!-- Fondo degradado naranja suave -->
+  <div class="min-h-screen bg-gradient-to-br from-[#FFEDE0] to-[#FFD8B5] flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-[0_20px_50px_rgba(255,107,43,0.15)] w-full max-w-md p-8 border border-[#FFE0CC]">
       
-      <form @submit.prevent="handleLogin" class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">Email</label>
-          <input 
-            v-model="email" 
-            type="email" 
-            required
-            class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-orange-500 outline-none"
-            placeholder="correo@ejemplo.com"
+      <div class="text-center mb-8">
+        <!-- LOGO -->
+        <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-[#FFF3EE] shadow-sm overflow-hidden">
+          <img 
+            v-if="hasLogo" 
+            src="@/assets/logo.png" 
+            alt="Logo Almacen" 
+            @error="handleImageError"
+            class="w-full h-full object-cover"
           />
+          <span v-else class="text-4xl">🛒</span>
         </div>
         
+        <h1 class="text-2xl font-black text-[#2A1A0A] uppercase tracking-wide">
+          Almacen <span class="text-[#FF6B2B]">Gloria</span>
+        </h1>
+        <p class="text-sm text-gray-500 italic mt-1">Precio, calidad y confianza.</p>
+      </div>
+
+      <form @submit.prevent="handleLogin" class="space-y-5">
         <div>
-          <label class="block text-sm font-medium text-gray-700">Contraseña</label>
+          <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Usuario</label>
+          <input 
+            v-model="username" 
+            type="text" 
+            required
+            class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#FF6B2B] focus:ring-2 focus:ring-[#FF6B2B]/20 transition-colors"
+            placeholder="admin"
+          />
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Contraseña</label>
           <input 
             v-model="password" 
             type="password" 
             required
-            class="w-full p-3 border border-gray-300 rounded-lg mt-1 focus:ring-2 focus:ring-orange-500 outline-none"
+            class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#FF6B2B] focus:ring-2 focus:ring-[#FF6B2B]/20 transition-colors"
             placeholder="••••••••"
           />
         </div>
 
+        <div v-if="errorMessage" class="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 text-center">
+          {{ errorMessage }}
+        </div>
+
         <button 
-          type="submit"
-          :disabled="loading"
-          class="w-full bg-orange-500 text-white p-3 rounded-lg font-bold hover:bg-orange-600 transition disabled:bg-gray-400 mt-2"
+          type="submit" 
+          :disabled="isLoading"
+          class="w-full bg-gradient-to-r from-[#FF6B2B] to-[#E85510] text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-[#FF6B2B]/20 hover:shadow-xl hover:opacity-90 transition-all disabled:opacity-50 mt-4 active:scale-[0.98]"
         >
-          {{ loading ? 'Ingresando...' : 'Entrar al Sistema' }}
+          {{ isLoading ? 'Validando...' : 'Ingresar al Sistema' }}
         </button>
       </form>
-
-      <p v-if="errorMsg" class="mt-4 text-red-500 text-sm text-center bg-red-50 p-2 rounded">
-        {{ errorMsg }}
-      </p>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import { supabase } from '../lib/supabaseClient'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/authStore' // Importamos el store real
 
-const email = ref('')
-const password = ref('')
-const loading = ref(false)
-const errorMsg = ref('')
 const router = useRouter()
+const authStore = useAuthStore()
+
+const username = ref('')
+const password = ref('')
+const isLoading = ref(false)
+const errorMessage = ref('')
+const hasLogo = ref(true)
+
+const handleImageError = () => { hasLogo.value = false }
 
 const handleLogin = async () => {
-  loading.value = true
-  errorMsg.value = ''
-  
-  // 1. Intentar iniciar sesión
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: email.value,
-    password: password.value,
-  })
+  isLoading.value = true
+  errorMessage.value = ''
 
-  if (error) {
-    errorMsg.value = "Error: " + error.message
-    loading.value = false
-    return
-  }
+  try {
+    // AQUÍ ES DONDE VUE HABLARÁ CON FASTAPI
+    // simulamos la llamada con un timeout:
+    await new Promise(resolve => setTimeout(resolve, 1000))
 
-  // 2. Si es exitoso, verificar el rol en tu tabla 'usuarios'
-  const { data: profile, error: profileError } = await supabase
-    .from('usuarios')
-    .select('role')
-    .eq('id', data.user.id)
-    .single()
-
-  if (profileError) {
-    errorMsg.value = "No se pudo cargar tu perfil de usuario."
-    loading.value = false
-    return
-  }
-
-  // 3. Redirección según el rol
-  console.log("Bienvenido, rol detectado:", profile.role)
-  
-  if (profile.role === 'admin') {
-    router.push('/dashboard') // Cambia esto por tu ruta de admin
-  } else {
-    router.push('/pos') // Cambia esto por tu ruta de ventas
-  }
-
-  loading.value = false
-}
-if (profile) {
-  setUserRole(profile.role) // <--- ESTO GUARDA EL ROL GLOBALMENTE
-  
-  if (profile.role === 'admin') {
-    router.push('/dashboard')
-  } else {
-    router.push('/pos')
+    // Simulando una validación (luego cambiarás esto por la validación real de tu base de datos)
+    if (username.value === 'admin' && password.value === 'admin') {
+      
+      // 1. Guardamos la "llave" (token) en el navegador
+      localStorage.setItem('token_gloria', 'aqui_va_el_token_secreto_de_fastapi')
+      localStorage.setItem('user_role', 'admin') // Guardas el rol para tus validaciones
+      
+      // 2. Lo enviamos al dashboard
+      router.push('/')
+    } else {
+      errorMessage.value = 'Usuario o contraseña incorrectos'
+    }
+  } catch (error) {
+    errorMessage.value = 'Error al conectar con el servidor'
+  } finally {
+    isLoading.value = false
   }
 }
 </script>

@@ -1,9 +1,18 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+
 import App from './App.vue'
-import router from './router' // <-- ¡Esto es vital!
-// Busca esta línea y cámbiala por la ruta correcta:
-import './assets/main.css'
+import router from './router'
+
+// Importa tus estilos globales (donde tienes configurado Tailwind)
+import './assets/main.css' 
+
 const app = createApp(App)
 
-app.use(router) // <-- ¡Esta línea es la que hace que App.vue entienda a las rutas!
+// Pinia permite gestionar el estado global (ej: datos de sesión, carrito, estado de caja)
+app.use(createPinia())
+
+// Vue Router para la navegación entre vistas
+app.use(router)
+
 app.mount('#app')

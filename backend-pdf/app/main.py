@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.routers import auth, inventario, ventas,categoria, reportes,producto,caja,dashboard,proveedores
+from app.routers import auth, inventario, ventas,categoria, reportes,producto,caja,dashboard,proveedores,pedidos
 app = FastAPI()
 
 app.add_middleware(
@@ -29,4 +29,5 @@ app.include_router(ventas.router)
 app.include_router(reportes.router)
 app.include_router(caja.router)  
 app.include_router(dashboard.router)
+app.include_router(pedidos.router)
 

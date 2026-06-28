@@ -1,9 +1,14 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
 
-# Copia la URI exacta desde Supabase Dashboard → Settings → Database
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres.vpdbqgrjzhwrqmvmjrlh:MiPassword123456Rober@aws-0-sa-east-1.pooler.supabase.com:6543/postgres"
+# Carga las variables del archivo .env
+load_dotenv()
+
+# Lee la variable de entorno de forma segura
+SQLALCHEMY_DATABASE_URL = os.getenv("SQLALCHEMY_DATABASE_URL")
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,

@@ -1,8 +1,11 @@
+<!-- App.vue o el layout principal -->
 <template>
-  <div class="flex h-screen bg-[#FDF6F0]">
-    <Sidebar v-if="!isLoginPage" />
-
-    <main class="flex-1 overflow-y-auto">
+  <div class="flex h-screen">
+    <Sidebar />
+    <main
+      class="flex-1 overflow-y-auto"
+      :class="!esAdmin ? 'pt-16' : ''"
+    >
       <router-view />
     </main>
   </div>
@@ -10,11 +13,9 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import Sidebar from './components/Sidebar.vue'
+import { useAuthStore } from '@/stores/authStore'
+import Sidebar from '@/components/Sidebar.vue'
 
-const route = useRoute()
-
-// Computed que detecta si estamos en la ruta de login
-const isLoginPage = computed(() => route.path === '/login')
+const authStore = useAuthStore()
+const esAdmin = computed(() => authStore.user?.role === 'admin')
 </script>

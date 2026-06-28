@@ -141,11 +141,13 @@ def registrar_compra(data: dict):
     numero = f"C-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
     total = sum(item["subtotal"] for item in data["items"])
 
+    # ✅ Ahora incluye proveedor_id
     compra = supabase.table("compras").insert({
         "numero_compra": numero,
         "total": total,
         "notas": data.get("notas", ""),
-        "estado": "completada"
+        "estado": "completada",
+        "proveedor_id": data.get("proveedor_id")  # ← nuevo
     }).execute()
 
     compra_id = compra.data[0]["id"]

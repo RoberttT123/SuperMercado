@@ -241,66 +241,103 @@
       </div>
 
       <div v-if="activeTab === 'compra'">
-        <h2 class="text-lg font-bold text-[#FF6B2B] mb-1">📥 Registrar Compra / Ingreso de Mercadería</h2>
-        <p class="text-sm text-gray-500 mb-6">Agrega productos al carrito de compra para actualizar el stock.</p>
+  <h2 class="text-lg font-bold text-[#FF6B2B] mb-1">📥 Registrar Compra / Ingreso de Mercadería</h2>
+  <p class="text-sm text-gray-500 mb-6">Agrega productos al carrito de compra para actualizar el stock.</p>
 
-        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 flex flex-wrap items-end gap-4">
-          <div class="flex-1 min-w-[200px]">
-            <label class="block text-sm font-bold text-gray-700 mb-1">📊 Producto</label>
-            <select v-model="compraTemp.productoId" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
-              <option :value="null">-- Seleccionar producto --</option>
-              <option v-for="p in productos" :key="p.id" :value="p.id">{{ p.codigo }} — {{ p.nombre }}</option>
-            </select>
-          </div>
-          <div class="w-24">
-            <label class="block text-sm font-bold text-gray-700 mb-1">Cantidad</label>
-            <input v-model.number="compraTemp.cantidad" type="number" min="1" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
-          </div>
-          <div class="w-32">
-            <label class="block text-sm font-bold text-gray-700 mb-1">P. Unit. (Bs.)</label>
-            <input v-model.number="compraTemp.precio" type="number" step="0.5" min="0" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
-          </div>
-          <button @click="agregarAlCarrito" :disabled="!compraTemp.productoId" class="bg-gray-800 hover:bg-black text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50">
-            ➕ Agregar
-          </button>
-        </div>
+  <!-- ✅ SELECTOR DE PROVEEDOR -->
+  <div class="mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+    <label class="block text-sm font-bold text-gray-700 mb-1">🏭 Proveedor</label>
+    <select v-model="proveedorId"
+      class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+      <option :value="null">— Sin proveedor especificado —</option>
+      <option v-for="p in proveedores" :key="p.id" :value="p.id">
+        {{ p.nombre }}{{ p.contacto ? ` · ${p.contacto}` : '' }}
+      </option>
+    </select>
+    <p class="text-xs text-gray-400 mt-2">
+      ¿No está el proveedor?
+      <router-link to="/proveedores" class="text-[#FF6B2B] font-bold hover:underline">
+        Regístralo aquí →
+      </router-link>
+    </p>
+  </div>
 
-        <div v-if="carritoCompra.length > 0">
-          <h3 class="font-bold text-gray-700 mb-3">Carrito de Compra</h3>
-          <div class="border border-gray-200 rounded-xl overflow-hidden mb-4">
-            <div v-for="(item, index) in carritoCompra" :key="index" class="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50">
-              <div class="flex-1 font-medium">{{ item.nombre }}</div>
-              <div class="w-24 text-center text-gray-600">x{{ item.cantidad }}</div>
-              <div class="w-32 text-right font-bold">Bs. {{ item.subtotal.toFixed(2) }}</div>
-              <div class="w-16 text-right">
-                <button @click="eliminarDelCarrito(index)" class="text-red-500 hover:text-red-700 font-bold px-2">🗑️</button>
-              </div>
-            </div>
-          </div>
-          
-          <div class="text-right text-xl font-black text-[#2A1A0A] mb-6">
-            Total compra: Bs. {{ totalCarrito.toFixed(2) }}
-          </div>
-          
-          <div class="mb-6">
-            <label class="block text-sm font-bold text-gray-700 mb-1">Notas (factura, proveedor, etc.)</label>
-            <input v-model="notasCompra" type="text" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
-          </div>
+  <!-- SELECTOR DE PRODUCTO + CANTIDAD -->
+  <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6 flex flex-wrap items-end gap-4">
+    <div class="flex-1 min-w-[200px]">
+      <label class="block text-sm font-bold text-gray-700 mb-1">📊 Producto</label>
+      <select v-model="compraTemp.productoId"
+        class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+        <option :value="null">-- Seleccionar producto --</option>
+        <option v-for="p in productos" :key="p.id" :value="p.id">{{ p.codigo }} — {{ p.nombre }}</option>
+      </select>
+    </div>
+    <div class="w-24">
+      <label class="block text-sm font-bold text-gray-700 mb-1">Cantidad</label>
+      <input v-model.number="compraTemp.cantidad" type="number" min="1"
+        class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+    </div>
+    <div class="w-32">
+      <label class="block text-sm font-bold text-gray-700 mb-1">P. Unit. (Bs.)</label>
+      <input v-model.number="compraTemp.precio" type="number" step="0.5" min="0"
+        class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+    </div>
+    <button @click="agregarAlCarrito" :disabled="!compraTemp.productoId"
+      class="bg-gray-800 hover:bg-black text-white font-bold py-2 px-6 rounded-lg transition-colors disabled:opacity-50">
+      ➕ Agregar
+    </button>
+  </div>
 
-          <div class="flex gap-4">
-            <button @click="registrarCompra" class="flex-1 bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-3 rounded-lg transition-colors">
-              ✅ Registrar Compra
-            </button>
-            <button @click="carritoCompra = []" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-lg transition-colors">
-              🗑️ Limpiar carrito
-            </button>
-          </div>
-        </div>
-        
-        <div v-else class="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">
-          El carrito está vacío. Agrega productos arriba para registrar una compra.
+  <!-- CARRITO -->
+  <div v-if="carritoCompra.length > 0">
+
+    <!-- Proveedor seleccionado visible -->
+    <div v-if="proveedorId" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700 font-bold">
+      🏭 Proveedor: {{ proveedores.find(p => p.id === proveedorId)?.nombre }}
+    </div>
+    <div v-else class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+      ⚠️ Sin proveedor asignado — puedes continuar o seleccionar uno arriba.
+    </div>
+
+    <h3 class="font-bold text-gray-700 mb-3">Carrito de Compra</h3>
+    <div class="border border-gray-200 rounded-xl overflow-hidden mb-4">
+      <div v-for="(item, index) in carritoCompra" :key="index"
+        class="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50">
+        <div class="flex-1 font-medium">{{ item.nombre }}</div>
+        <div class="w-24 text-center text-gray-600">x{{ item.cantidad }}</div>
+        <div class="w-32 text-right font-bold">Bs. {{ item.subtotal.toFixed(2) }}</div>
+        <div class="w-16 text-right">
+          <button @click="eliminarDelCarrito(index)" class="text-red-500 hover:text-red-700 font-bold px-2">🗑️</button>
         </div>
       </div>
+    </div>
+
+    <div class="text-right text-xl font-black text-[#2A1A0A] mb-6">
+      Total compra: Bs. {{ totalCarrito.toFixed(2) }}
+    </div>
+
+    <div class="mb-6">
+      <label class="block text-sm font-bold text-gray-700 mb-1">📝 Notas (factura, referencia, etc.)</label>
+      <input v-model="notasCompra" type="text" placeholder="Ej: Factura #001..."
+        class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
+    </div>
+
+    <div class="flex gap-4">
+      <button @click="registrarCompra"
+        class="flex-1 bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-3 rounded-lg transition-colors">
+        ✅ Registrar Compra
+      </button>
+      <button @click="carritoCompra = []"
+        class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-lg transition-colors">
+        🗑️ Limpiar carrito
+      </button>
+    </div>
+  </div>
+
+  <div v-else class="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border border-gray-200">
+    El carrito está vacío. Selecciona un proveedor y agrega productos arriba.
+  </div>
+</div>
 
     </div>
   </div>
@@ -317,7 +354,9 @@ const error = ref(null)
 // --- DATOS REALES ---
 const categorias = ref([])
 const productos = ref([])
-
+// Junto a las otras variables ref del script
+const proveedores = ref([])
+const proveedorId = ref(null)
 // --- CARGAR AL MONTAR ---
 onMounted(async () => {
   await cargarDatos()
@@ -327,12 +366,14 @@ const cargarDatos = async () => {
   loading.value = true
   error.value = null
   try {
-    const [prods, cats] = await Promise.all([
+    const [prods, cats, provs] = await Promise.all([
       inventarioService.getProductos(),
-      inventarioService.getCategorias()
+      inventarioService.getCategorias(),
+      inventarioService.getProveedores()  // ← agrega esto
     ])
     productos.value = prods
     categorias.value = cats
+    proveedores.value = provs.filter(p => p.activo)  // ← solo activos
   } catch (e) {
     error.value = 'Error al cargar datos. Verifica tu conexión.'
     console.error(e)
@@ -466,10 +507,15 @@ const totalCarrito = computed(() =>
 const registrarCompra = async () => {
   loading.value = true
   try {
-    const result = await inventarioService.registrarCompra(carritoCompra.value, notasCompra.value)
+    const result = await inventarioService.registrarCompra(
+      carritoCompra.value,
+      notasCompra.value,
+      proveedorId.value  
+    )
     alert(`✅ Compra ${result.numero_compra} registrada por Bs. ${result.total.toFixed(2)}`)
     carritoCompra.value = []
     notasCompra.value = ''
+    proveedorId.value = null
     await cargarDatos()
   } catch (e) {
     alert('❌ Error al registrar compra: ' + (e.response?.data?.detail || e.message))

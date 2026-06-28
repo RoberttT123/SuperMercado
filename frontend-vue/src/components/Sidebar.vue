@@ -66,6 +66,9 @@
           <router-link to="/reportes" class="nav-link" active-class="nav-active" title="Reportes">
             📊 <span v-if="!isCollapsed">Reportes</span>
           </router-link>
+            <router-link to="/proveedores" class="nav-link" active-class="nav-active" title="Proveedores">
+          🏭 <span v-if="!isCollapsed">Proveedores</span>
+           </router-link>
         </nav>
       </div>
     </div>

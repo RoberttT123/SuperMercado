@@ -27,6 +27,10 @@ const pedidosService = {
     const res = await api.put(`/pedidos/${id}/entregar`, data);
     return res.data;
   },
+  async editarPedido(id, data) {
+  const res = await api.put(`/pedidos/${id}/editar`, data);
+  return res.data;
+    },
   descargarPDF(id) {
     window.open(`http://localhost:8000/pedidos/${id}/pdf`, '_blank');
   }

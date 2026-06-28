@@ -1,10 +1,11 @@
 <template>
-  <!-- ═══════════════════════════════════════════
-       VENDEDOR — Sidebar como overlay móvil
-  ════════════════════════════════════════════ -->
+
+  <!-- ═══════════════════════════════════════
+       VENDEDOR — Overlay móvil
+  ════════════════════════════════════════ -->
   <div v-if="!esAdmin">
 
-    <!-- Botón flotante para abrir (siempre visible cuando está cerrado) -->
+    <!-- Botón flotante abrir -->
     <button
       v-if="!sidebarAbierto"
       @click="sidebarAbierto = true"
@@ -13,35 +14,31 @@
       ☰
     </button>
 
-    <!-- Overlay oscuro al abrir -->
+    <!-- Overlay oscuro -->
     <div
       v-if="sidebarAbierto"
       @click="sidebarAbierto = false"
       class="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
     ></div>
 
-    <!-- Panel lateral vendedor -->
+    <!-- Panel vendedor -->
     <aside
       :class="[
         sidebarAbierto ? 'translate-x-0' : '-translate-x-full',
         'fixed top-0 left-0 h-screen w-[280px] z-50 bg-gradient-to-b from-[#FFF9F6] to-[#FFE4D6] border-r-2 border-[#FFD0B8] flex flex-col justify-between shadow-2xl transition-transform duration-300'
       ]"
     >
-      <!-- Header vendedor -->
       <div>
+        <!-- Header -->
         <div class="bg-gradient-to-br from-[#FF6B2B] to-[#E85510] pt-4 pb-6 px-5 text-center rounded-b-[28px] relative">
-          <!-- Botón cerrar -->
           <button
             @click="sidebarAbierto = false"
-            class="absolute top-3 right-3 w-8 h-8 bg-white/20 text-white rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors text-sm font-black"
-          >
-            ✕
-          </button>
+            class="absolute top-3 right-3 w-8 h-8 bg-white/20 text-white rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors font-black"
+          >✕</button>
 
           <img src="/src/assets/logo.png" alt="Logo"
             class="w-20 h-20 object-cover rounded-full mx-auto block mb-3 bg-white border-4 border-white/30"
-            @error="handleImageError"
-            v-if="hasLogo"
+            @error="handleImageError" v-if="hasLogo"
           />
           <div v-else class="w-20 h-20 rounded-full mx-auto mb-3 bg-white flex items-center justify-center text-3xl">🛒</div>
 
@@ -76,8 +73,8 @@
             >
               <span class="text-2xl">📋</span>
               <div>
-                <div class="font-bold text-sm">Pedidos</div>
-                <div class="text-xs text-gray-400">Tomar y gestionar pedidos</div>
+                <div class="font-bold text-sm">Mis Pedidos</div>
+                <div class="text-xs text-gray-400">Preventa y gestión de entregas</div>
               </div>
             </router-link>
           </nav>
@@ -100,9 +97,9 @@
   </div>
 
 
-  <!-- ═══════════════════════════════════════════
-       ADMIN — Sidebar colapsable normal
-  ════════════════════════════════════════════ -->
+  <!-- ═══════════════════════════════════════
+       ADMIN — Sidebar fijo colapsable
+  ════════════════════════════════════════ -->
   <aside
     v-else
     :class="[
@@ -111,7 +108,7 @@
     ]"
   >
     <div>
-      <!-- LOGO Y TÍTULO -->
+      <!-- Logo -->
       <div class="bg-gradient-to-br from-[#FF6B2B] to-[#E85510] pt-2 pb-4 px-4 text-center rounded-b-[24px]">
         <div :class="['flex mb-2', isCollapsed ? 'justify-center' : 'justify-end']">
           <button
@@ -124,25 +121,26 @@
 
         <img src="/src/assets/logo.png" alt="Logo"
           class="w-[180px] h-[180px] object-cover rounded-full mx-auto block mb-2 bg-white"
-          @error="handleImageError"
-          v-if="hasLogo"
+          @error="handleImageError" v-if="hasLogo"
         />
         <div v-else class="w-[100px] h-[100px] rounded-full mx-auto mb-2 bg-white flex items-center justify-center text-2xl">🛒</div>
 
-        <h1 v-if="!isCollapsed" class="text-white font-black text-sm tracking-[0.1em] mt-2 drop-shadow-sm uppercase">Almacen Gloria</h1>
+        <h1 v-if="!isCollapsed" class="text-white font-black text-sm tracking-[0.1em] mt-2 uppercase">Almacen Gloria</h1>
         <p v-if="!isCollapsed" class="text-[#FFE4D4] text-[10px] italic mt-1">Precio, calidad y confianza.</p>
       </div>
 
-      <!-- CAJA STATUS -->
+      <!-- Estado caja -->
       <div v-if="!isCollapsed">
-        <div v-if="cajaStore.cajaAbierta" class="bg-white/60 border border-[#A5D6A7] border-l-[4px] border-l-[#4CAF50] rounded-xl py-2 px-3 mx-3 mt-4">
+        <div v-if="cajaStore.cajaAbierta"
+          class="bg-white/60 border border-[#A5D6A7] border-l-[4px] border-l-[#4CAF50] rounded-xl py-2 px-3 mx-3 mt-4">
           <div class="text-[9px] uppercase tracking-wider text-gray-500 mb-1 flex items-center">
             <span class="w-2 h-2 rounded-full bg-[#4CAF50] mr-2"></span> Caja abierta
           </div>
           <div class="text-xs font-bold text-gray-800">Bs. {{ cajaStore.montoInicial.toFixed(2) }}</div>
           <div class="text-[10px] text-gray-600">Cajero: {{ cajaStore.cajero }}</div>
         </div>
-        <div v-else class="bg-[#FFF3EE]/80 border border-[#FFCCB3] border-l-[4px] border-l-[#FF6B2B] rounded-xl py-2 px-3 mx-3 mt-4">
+        <div v-else
+          class="bg-[#FFF3EE]/80 border border-[#FFCCB3] border-l-[4px] border-l-[#FF6B2B] rounded-xl py-2 px-3 mx-3 mt-4">
           <div class="text-[9px] uppercase tracking-wider text-gray-500 mb-1">Caja cerrada</div>
           <div class="text-xs font-bold text-gray-800">Abre para vender</div>
         </div>
@@ -153,9 +151,12 @@
         </span>
       </div>
 
-      <!-- MENÚ ADMIN -->
+      <!-- Menú admin -->
       <div class="mt-5">
-        <div v-if="!isCollapsed" class="text-[10px] font-extrabold tracking-[0.14em] uppercase text-[#A09088] px-5 mb-2">Menú</div>
+        <div v-if="!isCollapsed"
+          class="text-[10px] font-extrabold tracking-[0.14em] uppercase text-[#A09088] px-5 mb-2">
+          Menú
+        </div>
         <nav class="flex flex-col gap-1 px-2">
           <router-link to="/" class="nav-link" active-class="nav-active" title="Dashboard">
             🏠 <span v-if="!isCollapsed">Dashboard</span>
@@ -175,16 +176,14 @@
           <router-link to="/proveedores" class="nav-link" active-class="nav-active" title="Proveedores">
             🏭 <span v-if="!isCollapsed">Proveedores</span>
           </router-link>
-          <router-link to="/pedidos" class="nav-link" active-class="nav-active" title="Pedidos">
-            📋 <span v-if="!isCollapsed">Pedidos</span>
-          </router-link>
         </nav>
       </div>
     </div>
 
-    <!-- FOOTER ADMIN -->
+    <!-- Footer admin -->
     <div class="pb-4">
-      <div v-if="!isCollapsed" class="bg-white/60 border border-[#FFD0B8] rounded-xl py-2 px-3 mx-3 mb-2">
+      <div v-if="!isCollapsed"
+        class="bg-white/60 border border-[#FFD0B8] rounded-xl py-2 px-3 mx-3 mb-2">
         <div class="text-[9px] uppercase text-[#9A857A]">Ventas hoy</div>
         <div class="text-sm font-extrabold text-[#E85510]">Bs. {{ cajaStore.ventasTotalesHoy.toFixed(2) }}</div>
       </div>
@@ -205,6 +204,7 @@
       </div>
     </div>
   </aside>
+
 </template>
 
 <script setup>
@@ -217,8 +217,8 @@ const router = useRouter()
 const authStore = useAuthStore()
 const cajaStore = useCajaStore()
 
-const isCollapsed = ref(false)      // admin: colapsa a iconos
-const sidebarAbierto = ref(false)   // vendedor: overlay abierto/cerrado
+const isCollapsed = ref(false)
+const sidebarAbierto = ref(false)
 const hasLogo = ref(true)
 const handleImageError = () => { hasLogo.value = false }
 
@@ -237,7 +237,7 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-/* Admin nav */
+/* Admin */
 .nav-link {
   display: flex;
   align-items: center;
@@ -261,7 +261,7 @@ const handleLogout = () => {
   font-weight: 700 !important;
 }
 
-/* Vendedor nav */
+/* Vendedor */
 .nav-link-vendedor {
   display: flex;
   align-items: center;

@@ -130,123 +130,232 @@
       </div>
 
       <!-- ===== TAB PENDIENTES ===== -->
-      <div v-if="activeTab === 'pendientes'">
-        <div class="flex justify-between items-center mb-6">
-          <h2 class="text-lg font-bold text-[#FF6B2B]">Pedidos Pendientes de Entrega</h2>
-          <button @click="cargarPendientes"
-            class="text-sm bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg transition-colors">
-            🔄 Actualizar
-          </button>
-        </div>
+      <!-- ===== TAB PENDIENTES ===== -->
+<div v-if="activeTab === 'pendientes'">
+  <div class="flex justify-between items-center mb-6">
+    <h2 class="text-lg font-bold text-[#FF6B2B]">Pedidos Pendientes de Entrega</h2>
+    <button @click="cargarPendientes"
+      class="text-sm bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg transition-colors">
+      🔄 Actualizar
+    </button>
+  </div>
 
-        <div v-if="cargando" class="text-center py-8 text-gray-400">⏳ Cargando...</div>
+  <div v-if="cargando" class="text-center py-8 text-gray-400">⏳ Cargando...</div>
 
-        <div v-else-if="pedidosPendientes.length === 0"
-          class="text-center py-10 text-gray-400 bg-gray-50 rounded-xl border border-gray-200">
-          <div class="text-4xl mb-2">🎉</div>
-          <div class="font-bold">No hay pedidos pendientes</div>
-        </div>
+  <div v-else-if="pedidosPendientes.length === 0"
+    class="text-center py-10 text-gray-400 bg-gray-50 rounded-xl border border-gray-200">
+    <div class="text-4xl mb-2">🎉</div>
+    <div class="font-bold">No hay pedidos pendientes</div>
+  </div>
 
-        <div v-else class="space-y-4">
-          <div v-for="pedido in pedidosPendientes" :key="pedido.id"
-            class="border border-gray-200 rounded-xl overflow-hidden">
-            <div class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
-              @click="togglePedido(pedido.id)">
-              <div>
-                <div class="font-black text-[#FF6B2B]">{{ pedido.numero }}</div>
-                <div class="text-sm font-bold text-gray-700">{{ pedido.cliente }}</div>
-                <div class="text-xs text-gray-400">
-                  {{ formatoFecha(pedido.fecha) }}
-                  <span v-if="pedido.notas"> · 📝 {{ pedido.notas }}</span>
-                </div>
-              </div>
-              <div class="flex items-center gap-3">
-                <span class="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full">⏳ Pendiente</span>
-                <span class="text-gray-400">{{ pedidoAbierto === pedido.id ? '▲' : '▼' }}</span>
-              </div>
-            </div>
+  <div v-else class="space-y-4">
+    <div v-for="pedido in pedidosPendientes" :key="pedido.id"
+      class="border border-gray-200 rounded-xl overflow-hidden">
 
-            <div v-if="pedidoAbierto === pedido.id" class="p-4 border-t border-gray-100">
-              <div v-if="!detallesPedidos[pedido.id]" class="text-center py-4 text-gray-400">⏳ Cargando...</div>
-              <div v-else>
-                <table class="w-full text-left border-collapse mb-4">
-                  <thead>
-                    <tr class="border-b border-gray-100 text-xs text-gray-500">
-                      <th class="pb-2">Producto</th>
-                      <th class="pb-2 text-center">Cant.</th>
-                      <th class="pb-2 text-right">P. Venta</th>
-                      <th class="pb-2 text-right">Subtotal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="item in detallesPedidos[pedido.id]" :key="item.id" class="border-b border-gray-50">
-                      <td class="py-2 text-sm font-medium">{{ (item.productos || {}).nombre || '—' }}</td>
-                      <td class="py-2 text-sm text-center">{{ item.cantidad }}</td>
-                      <td class="py-2 text-sm text-right">Bs. {{ item.precio_venta.toFixed(2) }}</td>
-                      <td class="py-2 text-sm text-right font-bold">Bs. {{ (item.cantidad * item.precio_venta).toFixed(2) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <div class="text-right font-black text-lg text-[#2A1A0A] mb-4">
-                  Total: Bs. {{ totalPedido(detallesPedidos[pedido.id]).toFixed(2) }}
-                </div>
-
-                <!-- Panel entrega -->
-                <div v-if="entregandoId === pedido.id"
-                  class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
-                  <h4 class="font-bold text-gray-700 mb-3">💳 Confirmar entrega y cobro</h4>
-                  <div class="grid grid-cols-2 gap-4">
-                    <div>
-                      <label class="block text-xs font-bold text-gray-600 mb-1">Método de pago</label>
-                      <select v-model="formEntrega.metodo_pago"
-                        class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm">
-                        <option value="efectivo">💵 Efectivo</option>
-                        <option value="qr">📱 QR / Transferencia</option>
-                        <option value="tarjeta">💳 Tarjeta</option>
-                      </select>
-                    </div>
-                    <div v-if="formEntrega.metodo_pago === 'efectivo'">
-                      <label class="block text-xs font-bold text-gray-600 mb-1">Monto recibido</label>
-                      <input type="number" v-model.number="formEntrega.monto_recibido" min="0" step="0.5"
-                        class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm">
-                      <p class="text-xs text-gray-400 mt-1">
-                        Cambio: Bs. {{ Math.max(0, formEntrega.monto_recibido - totalPedido(detallesPedidos[pedido.id])).toFixed(2) }}
-                      </p>
-                    </div>
-                  </div>
-                  <div class="flex gap-3 mt-4">
-                    <button @click="confirmarEntrega(pedido)" :disabled="procesando"
-                      class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
-                      {{ procesando ? '⏳ Procesando...' : '✅ Confirmar Entrega' }}
-                    </button>
-                    <button @click="entregandoId = null"
-                      class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-xl transition-colors">
-                      Cancelar
-                    </button>
-                  </div>
-                </div>
-
-                <div v-else class="flex gap-3">
-                  <button @click="iniciarEntrega(pedido)"
-                    class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-colors text-sm">
-                    🚚 Marcar Entregado
-                  </button>
-                  <button @click="pedidosService.descargarPDF(pedido.id)"
-                    class="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold py-2 px-4 rounded-xl transition-colors text-sm">
-                    📄 PDF
-                  </button>
-                  <button @click="cancelarPedido(pedido)"
-                    class="bg-red-50 text-red-500 hover:bg-red-100 font-bold py-2 px-4 rounded-xl transition-colors text-sm">
-                    ❌
-                  </button>
-                </div>
-              </div>
-            </div>
+      <!-- Header del pedido -->
+      <div class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer"
+        @click="togglePedido(pedido.id)">
+        <div>
+          <div class="font-black text-[#FF6B2B]">{{ pedido.numero }}</div>
+          <div class="text-sm font-bold text-gray-700">{{ pedido.cliente }}</div>
+          <div class="text-xs text-gray-400">
+            {{ formatoFecha(pedido.fecha) }}
+            <span v-if="pedido.notas"> · 📝 {{ pedido.notas }}</span>
           </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full">
+            ⏳ Pendiente
+          </span>
+          <span class="text-gray-400">{{ pedidoAbierto === pedido.id ? '▲' : '▼' }}</span>
         </div>
       </div>
 
+      <!-- Detalle expandible -->
+      <div v-if="pedidoAbierto === pedido.id" class="p-4 border-t border-gray-100">
+        <div v-if="!detallesPedidos[pedido.id]" class="text-center py-4 text-gray-400">
+          ⏳ Cargando...
+        </div>
+        <div v-else>
+
+          <!-- ── MODO EDICIÓN ── -->
+          <div v-if="editandoId === pedido.id">
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
+              <div class="font-bold text-blue-800 text-sm mb-1">✏️ Modo edición</div>
+              <div class="text-xs text-blue-600">Edita cantidades, elimina o agrega productos. Guarda cuando termines.</div>
+            </div>
+
+            <!-- Notas editables -->
+            <div class="mb-4">
+              <label class="block text-xs font-bold text-gray-600 mb-1">📝 Notas del pedido</label>
+              <input v-model="formEdicionPedido.notas" type="text"
+                placeholder="Ej: entregar el martes..."
+                class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm">
+            </div>
+
+            <!-- Items editables -->
+            <div class="mb-4">
+              <div class="text-xs font-bold text-gray-500 uppercase mb-2">Productos del pedido</div>
+              <div class="space-y-2">
+                <div v-for="(item, index) in formEdicionPedido.items" :key="index"
+                  class="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl">
+                  <div class="flex-1">
+                    <div class="font-bold text-sm">{{ item.nombre }}</div>
+                    <div class="text-xs text-gray-400">Bs. {{ item.precio_venta.toFixed(2) }} c/u</div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button @click="item.cantidad = Math.max(1, item.cantidad - 1)"
+                      class="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-lg font-black text-gray-600 flex items-center justify-center transition-colors">
+                      −
+                    </button>
+                    <input type="number" min="1" v-model.number="item.cantidad"
+                      class="w-14 text-center border border-gray-200 rounded-lg py-1 text-sm font-bold focus:outline-none focus:border-[#FF6B2B]">
+                    <button @click="item.cantidad++"
+                      class="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-lg font-black text-gray-600 flex items-center justify-center transition-colors">
+                      +
+                    </button>
+                  </div>
+                  <span class="text-sm font-bold w-20 text-right">
+                    Bs. {{ (item.precio_venta * item.cantidad).toFixed(2) }}
+                  </span>
+                  <button @click="formEdicionPedido.items.splice(index, 1)"
+                    class="text-red-500 hover:text-red-700 w-8 h-8 flex items-center justify-center bg-red-50 rounded-lg hover:bg-red-100 transition-colors">
+                    🗑️
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agregar producto al pedido -->
+            <div class="mb-4 bg-gray-50 p-3 rounded-xl border border-gray-200">
+              <div class="text-xs font-bold text-gray-600 uppercase mb-2">➕ Agregar producto</div>
+              <input v-model="busquedaEdicion" type="text"
+                placeholder="Buscar producto para agregar..."
+                class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm mb-2">
+
+              <div v-if="productosParaEdicion.length > 0"
+                class="border border-gray-200 rounded-lg overflow-hidden">
+                <div v-for="prod in productosParaEdicion" :key="prod.id"
+                  class="flex items-center justify-between p-2 hover:bg-orange-50 border-b border-gray-100 last:border-0 cursor-pointer transition-colors"
+                  @click="agregarProductoEdicion(prod)">
+                  <div>
+                    <div class="font-bold text-xs">{{ prod.nombre }}</div>
+                    <div class="text-[10px] text-gray-400">Bs. {{ prod.precio_venta.toFixed(2) }} · Stock: {{ prod.stock }}</div>
+                  </div>
+                  <span class="text-[#FF6B2B] font-black text-lg">+</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Total edición -->
+            <div class="text-right font-black text-base text-[#2A1A0A] mb-4">
+              Total estimado: Bs. {{ totalEdicion.toFixed(2) }}
+            </div>
+
+            <!-- Botones guardar/cancelar edición -->
+            <div class="flex gap-3">
+              <button @click="guardarEdicionPedido(pedido.id)"
+                :disabled="guardandoEdicion || formEdicionPedido.items.length === 0"
+                class="flex-1 bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+                {{ guardandoEdicion ? '⏳ Guardando...' : '💾 Guardar cambios' }}
+              </button>
+              <button @click="cancelarEdicion"
+                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+
+          <!-- ── MODO VISTA NORMAL ── -->
+          <div v-else>
+            <!-- Tabla items -->
+            <table class="w-full text-left border-collapse mb-4">
+              <thead>
+                <tr class="border-b border-gray-100 text-xs text-gray-500">
+                  <th class="pb-2">Producto</th>
+                  <th class="pb-2 text-center">Cant.</th>
+                  <th class="pb-2 text-right">P. Venta</th>
+                  <th class="pb-2 text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="item in detallesPedidos[pedido.id]" :key="item.id"
+                  class="border-b border-gray-50">
+                  <td class="py-2 text-sm font-medium">{{ (item.productos || {}).nombre || '—' }}</td>
+                  <td class="py-2 text-sm text-center font-bold">{{ item.cantidad }}</td>
+                  <td class="py-2 text-sm text-right">Bs. {{ item.precio_venta.toFixed(2) }}</td>
+                  <td class="py-2 text-sm text-right font-bold">
+                    Bs. {{ (item.cantidad * item.precio_venta).toFixed(2) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="text-right font-black text-lg text-[#2A1A0A] mb-4">
+              Total: Bs. {{ totalPedido(detallesPedidos[pedido.id]).toFixed(2) }}
+            </div>
+
+            <!-- Panel entrega -->
+            <div v-if="entregandoId === pedido.id"
+              class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
+              <h4 class="font-bold text-gray-700 mb-3">💳 Confirmar entrega y cobro</h4>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-gray-600 mb-1">Método de pago</label>
+                  <select v-model="formEntrega.metodo_pago"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm">
+                    <option value="efectivo">💵 Efectivo</option>
+                    <option value="qr">📱 QR / Transferencia</option>
+                    <option value="tarjeta">💳 Tarjeta</option>
+                  </select>
+                </div>
+                <div v-if="formEntrega.metodo_pago === 'efectivo'">
+                  <label class="block text-xs font-bold text-gray-600 mb-1">Monto recibido</label>
+                  <input type="number" v-model.number="formEntrega.monto_recibido" min="0" step="0.5"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm">
+                  <p class="text-xs text-gray-400 mt-1">
+                    Cambio: Bs. {{ Math.max(0, formEntrega.monto_recibido - totalPedido(detallesPedidos[pedido.id])).toFixed(2) }}
+                  </p>
+                </div>
+              </div>
+              <div class="flex gap-3 mt-4">
+                <button @click="confirmarEntrega(pedido)" :disabled="procesando"
+                  class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-colors disabled:opacity-50">
+                  {{ procesando ? '⏳ Procesando...' : '✅ Confirmar Entrega' }}
+                </button>
+                <button @click="entregandoId = null"
+                  class="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 px-4 rounded-xl transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+
+            <!-- Botones acción -->
+            <div v-else class="grid grid-cols-2 gap-3">
+              <button @click="iniciarEntrega(pedido)"
+                class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition-colors text-sm">
+                🚚 Marcar Entregado
+              </button>
+              <button @click="iniciarEdicion(pedido)"
+                class="bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold py-3 rounded-xl transition-colors text-sm border border-blue-200">
+                ✏️ Editar Pedido
+              </button>
+              <button @click="pedidosService.descargarPDF(pedido.id)"
+                class="bg-gray-50 text-gray-600 hover:bg-gray-100 font-bold py-2 rounded-xl transition-colors text-sm border border-gray-200">
+                📄 PDF
+              </button>
+              <button @click="cancelarPedido(pedido)"
+                class="bg-red-50 text-red-500 hover:bg-red-100 font-bold py-2 rounded-xl transition-colors text-sm border border-red-200">
+                ❌ Cancelar pedido
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
       <!-- ===== TAB HISTORIAL ===== -->
       <div v-if="activeTab === 'historial'">
         <div class="flex justify-between items-center mb-6">
@@ -408,7 +517,7 @@ const guardando = ref(false)
 const procesando = ref(false)
 const cargandoHistorial = ref(false)
 
-// --- NUEVO PEDIDO ---
+// ── NUEVO PEDIDO ────────────────────────────────────────────────────
 const formPedido = ref({ cliente: '', notas: '' })
 const busquedaProducto = ref('')
 const itemsPedido = ref([])
@@ -486,7 +595,7 @@ const limpiarPedido = () => {
   busquedaProducto.value = ''
 }
 
-// --- PENDIENTES ---
+// ── PEDIDOS PENDIENTES ───────────────────────────────────────────────
 const pedidosPendientes = ref([])
 const pedidoAbierto = ref(null)
 const detallesPedidos = ref({})
@@ -521,6 +630,7 @@ const totalPedido = (items) => {
 
 const iniciarEntrega = (pedido) => {
   entregandoId.value = pedido.id
+  editandoId.value = null  // cerrar edición si estaba abierta
   formEntrega.value = {
     metodo_pago: 'efectivo',
     monto_recibido: totalPedido(detallesPedidos.value[pedido.id])
@@ -560,7 +670,104 @@ const cancelarPedido = async (pedido) => {
   }
 }
 
-// --- HISTORIAL ---
+// ── EDICIÓN DE PEDIDO ────────────────────────────────────────────────
+const editandoId = ref(null)
+const guardandoEdicion = ref(false)
+const busquedaEdicion = ref('')
+const formEdicionPedido = ref({ notas: '', items: [] })
+
+const productosParaEdicion = computed(() => {
+  if (!busquedaEdicion.value) return []
+  const term = busquedaEdicion.value.toLowerCase()
+  return todosProductos.value
+    .filter(p =>
+      p.nombre.toLowerCase().includes(term) || p.codigo.includes(term)
+    )
+    .slice(0, 5)
+})
+
+const totalEdicion = computed(() =>
+  formEdicionPedido.value.items.reduce(
+    (acc, i) => acc + i.precio_venta * i.cantidad, 0
+  )
+)
+
+const iniciarEdicion = (pedido) => {
+  editandoId.value = pedido.id
+  entregandoId.value = null  // cerrar panel entrega si estaba abierto
+  busquedaEdicion.value = ''
+
+  const items = detallesPedidos.value[pedido.id] || []
+  formEdicionPedido.value = {
+    notas: pedido.notas || '',
+    items: items.map(i => ({
+      producto_id: i.producto_id,
+      nombre: (i.productos || {}).nombre || '—',
+      precio_venta: i.precio_venta,
+      cantidad: i.cantidad
+    }))
+  }
+}
+
+const cancelarEdicion = () => {
+  editandoId.value = null
+  busquedaEdicion.value = ''
+  formEdicionPedido.value = { notas: '', items: [] }
+}
+
+const agregarProductoEdicion = (prod) => {
+  const existe = formEdicionPedido.value.items.findIndex(
+    i => i.producto_id === prod.id
+  )
+  if (existe !== -1) {
+    formEdicionPedido.value.items[existe].cantidad++
+  } else {
+    formEdicionPedido.value.items.push({
+      producto_id: prod.id,
+      nombre: prod.nombre,
+      precio_venta: prod.precio_venta,
+      cantidad: 1
+    })
+  }
+  busquedaEdicion.value = ''
+}
+
+const guardarEdicionPedido = async (pedidoId) => {
+  if (formEdicionPedido.value.items.length === 0) {
+    alert('⚠️ El pedido debe tener al menos un producto')
+    return
+  }
+  guardandoEdicion.value = true
+  try {
+    await pedidosService.editarPedido(pedidoId, {
+      notas: formEdicionPedido.value.notas,
+      items: formEdicionPedido.value.items.map(i => ({
+        producto_id: i.producto_id,
+        cantidad: i.cantidad,
+        precio_venta: i.precio_venta
+      }))
+    })
+
+    // Recargar detalle actualizado
+    const pedidoActualizado = await pedidosService.getPedido(pedidoId)
+    detallesPedidos.value[pedidoId] = pedidoActualizado.items
+
+    // Actualizar notas en la lista sin recargar todo
+    const idx = pedidosPendientes.value.findIndex(p => p.id === pedidoId)
+    if (idx !== -1) {
+      pedidosPendientes.value[idx].notas = formEdicionPedido.value.notas
+    }
+
+    cancelarEdicion()
+    alert('✅ Pedido actualizado correctamente')
+  } catch (e) {
+    alert('❌ ' + (e.response?.data?.detail || 'Error al guardar'))
+  } finally {
+    guardandoEdicion.value = false
+  }
+}
+
+// ── HISTORIAL ────────────────────────────────────────────────────────
 const historial = ref([])
 const historialAbierto = ref(null)
 const detallesHistorial = ref({})
@@ -603,6 +810,7 @@ const cargarDetalleHistorial = async (id) => {
   } catch (e) { console.error(e) }
 }
 
+// ── UTILIDADES ───────────────────────────────────────────────────────
 const formatoFecha = (f) => {
   if (!f) return '—'
   return new Date(f).toLocaleString('es-BO', {

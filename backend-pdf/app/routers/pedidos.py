@@ -23,6 +23,8 @@ class PedidoCreate(BaseModel):
     items: List[ItemPedido]
 
 
+# ── Rutas SIN parámetros dinámicos PRIMERO ──────────────────────────
+
 @router.get("/")
 def get_pedidos(estado: Optional[str] = None):
     query = supabase.table("pedidos").select("*").order("fecha", desc=True)
@@ -42,18 +44,16 @@ def get_pedidos_pendientes(vendedor: Optional[str] = None):
     return query.execute().data
 
 
-@router.get("/{pedido_id}")
-def get_pedido(pedido_id: int):
-    pedido = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
-    if not pedido.data:
-        raise HTTPException(status_code=404, detail="Pedido no encontrado")
-
-    detalle = supabase.table("detalle_pedidos")\
-        .select("*, productos(nombre, codigo, precio_venta)")\
-        .eq("pedido_id", pedido_id)\
-        .execute()
-
-    return {**pedido.data[0], "items": detalle.data}
+# ✅ CRÍTICO: /historial ANTES de /{pedido_id}
+@router.get("/historial")
+def get_historial(vendedor: Optional[str] = None):
+    query = supabase.table("pedidos")\
+        .select("*, ventas(numero_venta, total, fecha, metodo_pago)")\
+        .order("fecha", desc=True)\
+        .limit(100)
+    if vendedor:
+        query = query.eq("vendedor", vendedor)
+    return query.execute().data
 
 
 @router.post("/")
@@ -82,6 +82,22 @@ def crear_pedido(pedido: PedidoCreate):
     return {"success": True, "numero": numero, "pedido_id": pedido_id}
 
 
+# ── Rutas CON parámetros dinámicos DESPUÉS ──────────────────────────
+
+@router.get("/{pedido_id}")
+def get_pedido(pedido_id: int):
+    pedido = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
+    if not pedido.data:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+
+    detalle = supabase.table("detalle_pedidos")\
+        .select("*, productos(nombre, codigo, precio_venta)")\
+        .eq("pedido_id", pedido_id)\
+        .execute()
+
+    return {**pedido.data[0], "items": detalle.data}
+
+
 @router.put("/{pedido_id}/cancelar")
 def cancelar_pedido(pedido_id: int):
     pedido = supabase.table("pedidos").select("estado").eq("id", pedido_id).execute()
@@ -96,12 +112,10 @@ def cancelar_pedido(pedido_id: int):
 
 @router.put("/{pedido_id}/entregar")
 def entregar_pedido(pedido_id: int, data: dict):
-    """Convierte el pedido en venta y lo marca como entregado"""
     pedido = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
     if not pedido.data:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
-    # Registrar la venta
     numero_venta = f"V-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
     items = data.get("items", [])
     total = sum(i["subtotal"] for i in items)
@@ -130,7 +144,6 @@ def entregar_pedido(pedido_id: int, data: dict):
             "subtotal": item["subtotal"]
         }).execute()
 
-        # Descontar stock
         prod = supabase.table("productos").select("stock").eq("id", item["producto_id"]).execute()
         nuevo_stock = prod.data[0]["stock"] - item["cantidad"]
         supabase.table("productos").update({"stock": nuevo_stock}).eq("id", item["producto_id"]).execute()
@@ -142,7 +155,6 @@ def entregar_pedido(pedido_id: int, data: dict):
             "motivo": f"Venta pedido {pedido.data[0]['numero']}"
         }).execute()
 
-    # Marcar pedido como entregado
     supabase.table("pedidos").update({
         "estado": "entregado",
         "venta_id": venta_id
@@ -150,7 +162,39 @@ def entregar_pedido(pedido_id: int, data: dict):
 
     return {"success": True, "numero_venta": numero_venta, "total": total, "venta_id": venta_id}
 
+@router.put("/{pedido_id}/editar")
+def editar_pedido(pedido_id: int, data: dict):
+    """
+    data: {
+        "notas": str (opcional),
+        "items": [{ producto_id, cantidad, precio_venta }]
+    }
+    """
+    pedido = supabase.table("pedidos").select("estado").eq("id", pedido_id).execute()
+    if not pedido.data:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if pedido.data[0]["estado"] != "pendiente":
+        raise HTTPException(status_code=400, detail="Solo se pueden editar pedidos pendientes")
 
+    # Actualizar notas si vienen
+    update_data = {}
+    if "notas" in data:
+        update_data["notas"] = data["notas"]
+    if update_data:
+        supabase.table("pedidos").update(update_data).eq("id", pedido_id).execute()
+
+    # Borrar items anteriores y reemplazar con los nuevos
+    supabase.table("detalle_pedidos").delete().eq("pedido_id", pedido_id).execute()
+
+    for item in data.get("items", []):
+        supabase.table("detalle_pedidos").insert({
+            "pedido_id": pedido_id,
+            "producto_id": item["producto_id"],
+            "cantidad": item["cantidad"],
+            "precio_venta": item["precio_venta"]
+        }).execute()
+
+    return {"success": True, "mensaje": "Pedido actualizado"}
 @router.get("/{pedido_id}/pdf")
 def descargar_pdf_pedido(pedido_id: int):
     from fpdf import FPDF
@@ -168,7 +212,6 @@ def descargar_pdf_pedido(pedido_id: int):
     pdf.add_page()
     pdf.set_margins(12, 12, 12)
 
-    # Header naranja
     pdf.set_fill_color(255, 107, 43)
     pdf.rect(0, 0, pdf.w, 28, style="F")
     pdf.set_y(6)
@@ -189,11 +232,10 @@ def descargar_pdf_pedido(pedido_id: int):
         pdf.cell(0, 6, f"Notas: {p['notas']}", ln=True)
     pdf.ln(3)
 
-    # Tabla
+    ancho = pdf.w - 24
     pdf.set_fill_color(255, 235, 210)
     pdf.set_text_color(150, 60, 0)
     pdf.set_font("Helvetica", "B", 8)
-    ancho = pdf.w - 24
     pdf.cell(ancho * 0.6, 7, "PRODUCTO", fill=True)
     pdf.cell(ancho * 0.2, 7, "CANT.", fill=True, align="C")
     pdf.cell(ancho * 0.2, 7, "P. VENTA", fill=True, align="R", ln=True)
@@ -217,13 +259,3 @@ def descargar_pdf_pedido(pedido_id: int):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=pedido_{p['numero']}.pdf"}
     )
-@router.get("/historial")
-def get_historial(vendedor: Optional[str] = None):
-    query = supabase.table("pedidos")\
-        .select("*, ventas(numero_venta, total, fecha, metodo_pago)")\
-        .order("fecha", desc=True)\
-        .limit(100)
-    if vendedor:
-        query = query.eq("vendedor", vendedor)
-    result = query.execute()
-    return result.data

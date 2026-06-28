@@ -2,9 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '../views/DashboardView.vue'
 import LoginView from '@/views/LoginView.vue'
 
-// Rutas que solo puede ver el admin
-const rutasAdmin = ['dashboard', 'caja', 'inventario', 'reportes', 'proveedores']
-
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -13,6 +10,7 @@ const router = createRouter({
       name: 'login',
       component: LoginView
     },
+    // ── SOLO ADMIN ──────────────────────────────────
     {
       path: '/',
       name: 'dashboard',
@@ -49,14 +47,15 @@ const router = createRouter({
       component: () => import('../views/ProveedoresView.vue'),
       meta: { requiereAuth: true, soloAdmin: true }
     },
+    // ── SOLO VENDEDOR ────────────────────────────────
     {
       path: '/pedidos',
       name: 'pedidos',
       component: () => import('../views/PedidosView.vue'),
-      meta: { requiereAuth: true }  // ← accesible para todos los roles
+      meta: { requiereAuth: true, soloVendedor: true }
     },
+    // ── Catch-all ────────────────────────────────────
     {
-      // Captura cualquier URL no definida
       path: '/:pathMatch(.*)*',
       redirect: '/login'
     }
@@ -69,19 +68,24 @@ router.beforeEach((to, from, next) => {
   const user = JSON.parse(localStorage.getItem('user') || 'null')
   const role = user?.role || null
 
-  // 1. Si no está logueado y la ruta requiere auth → al login
+  // 1. Sin token → login
   if (to.meta.requiereAuth && !token) {
     return next({ name: 'login' })
   }
 
-  // 2. Si ya está logueado e intenta ir al login → redirigir según rol
+  // 2. Ya logueado intenta ir al login → redirigir según rol
   if (to.name === 'login' && token) {
     return next(role === 'admin' ? { name: 'dashboard' } : { name: 'pedidos' })
   }
 
-  // 3. Si es vendedor e intenta acceder a ruta solo admin → a pedidos
+  // 3. Vendedor intenta ruta de admin → a pedidos
   if (to.meta.soloAdmin && role === 'vendedor') {
     return next({ name: 'pedidos' })
+  }
+
+  // 4. Admin intenta ruta de vendedor → a dashboard
+  if (to.meta.soloVendedor && role === 'admin') {
+    return next({ name: 'dashboard' })
   }
 
   next()

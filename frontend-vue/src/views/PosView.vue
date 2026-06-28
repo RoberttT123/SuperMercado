@@ -51,7 +51,32 @@
             </button>
           </div>
         </div>
+        <!-- Resultados de búsqueda por nombre -->
+        <div v-if="errorBusqueda" class="mt-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-200">
+          {{ errorBusqueda }}
+        </div>
 
+        <div v-if="resultadosBusqueda.length > 0" class="mt-2 border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+          <div
+            v-for="prod in resultadosBusqueda"
+            :key="prod.id"
+            @click="agregarAlCarrito(prod, cantidadNom)"
+            class="flex justify-between items-center p-3 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-0 transition-colors"
+          >
+            <div>
+              <span class="font-bold text-sm">{{ prod.nombre }}</span>
+              <span class="text-xs text-gray-400 ml-2">{{ prod.codigo }}</span>
+            </div>
+            <div class="text-right">
+              <span class="font-black text-[#FF6B2B]">Bs. {{ prod.precio_venta.toFixed(2) }}</span>
+              <span class="text-xs text-gray-400 ml-2">Stock: {{ prod.stock }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="buscando" class="mt-2 text-center text-sm text-gray-500">
+          🔍 Buscando...
+        </div>
         <!-- Carrito -->
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-[#FFE0CC] flex-1">
           <h2 class="text-lg font-bold text-[#FF6B2B] mb-4">🛒 Carrito ({{ carrito.length }} items)</h2>
@@ -175,16 +200,17 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '@/stores/authStore';
+import { ref, computed, watch, onMounted } from 'vue'
+import { useAuthStore } from '@/stores/authStore'
+import posService from '@/services/posService'
 
-const authStore = useAuthStore();
-import { ref, computed, watch } from 'vue'
+const authStore = useAuthStore()
 
-// --- ESTADO GLOBAL (Simulado temporalmente) ---
+// --- ESTADO GLOBAL ---
 const cajaActiva = ref(true)
-const cajeroActual = ref('Admin')
-const ventasHoyCount = ref(15)
-const totalHoyMonto = ref(1250.50)
+const cajeroActual = ref(authStore.user?.username || 'Cajero')
+const ventasHoyCount = ref(0)
+const totalHoyMonto = ref(0)
 
 // --- ESTADO DEL POS ---
 const metodoBusqueda = ref('codigo')
@@ -192,6 +218,9 @@ const codigoInput = ref('')
 const cantidadScan = ref(1)
 const nombreBusq = ref('')
 const cantidadNom = ref(1)
+const resultadosBusqueda = ref([])
+const buscando = ref(false)
+const errorBusqueda = ref('')
 
 const carrito = ref([])
 const descuento = ref(0)
@@ -199,15 +228,16 @@ const metodoPago = ref('efectivo')
 const montoRecibido = ref(0)
 const notasVenta = ref('')
 const ventaOk = ref(null)
+const procesando = ref(false)
 
-// --- COMPUTADOS (Lógica matemática) ---
-const subtotal = computed(() => {
-  return carrito.value.reduce((acc, item) => acc + item.subtotal, 0)
-})
+// --- COMPUTADOS ---
+const subtotal = computed(() =>
+  carrito.value.reduce((acc, item) => acc + item.subtotal, 0)
+)
 
-const total = computed(() => {
-  return Math.max(0, subtotal.value - (descuento.value || 0))
-})
+const total = computed(() =>
+  Math.max(0, subtotal.value - (descuento.value || 0))
+)
 
 const cambio = computed(() => {
   if (metodoPago.value !== 'efectivo') return 0
@@ -216,54 +246,108 @@ const cambio = computed(() => {
 
 const puedeCobrar = computed(() => {
   if (carrito.value.length === 0) return false
+  if (procesando.value) return false
   if (metodoPago.value === 'efectivo' && (montoRecibido.value || 0) < total.value) return false
   return true
 })
 
-// Auto-ajustar monto recibido cuando cambia el total
 watch(total, (newTotal) => {
-  if (metodoPago.value === 'efectivo' && carrito.value.length > 0 && montoRecibido.value === 0) {
+  if (metodoPago.value === 'efectivo' && carrito.value.length > 0) {
     montoRecibido.value = newTotal
   }
 })
 
-// --- FUNCIONES ---
+// --- CARGAR RESUMEN DEL DÍA ---
+onMounted(async () => {
+  await cargarResumenHoy()
+})
 
-const simularBusqueda = () => {
-  // Aquí irá la llamada fetch a FastAPI (buscar_producto_por_codigo)
-  // Por ahora, simulamos agregar un producto genérico para que veas la UI funcionar
-  const term = metodoBusqueda.value === 'codigo' ? codigoInput.value : nombreBusq.value;
-  if (!term) return;
+const cargarResumenHoy = async () => {
+  try {
+    const resumen = await posService.getResumenHoy()
+    ventasHoyCount.value = resumen.total_transacciones || 0
+    totalHoyMonto.value = resumen.ingresos_totales || 0
+  } catch (e) {
+    console.error('Error cargando resumen:', e)
+  }
+}
 
-  const cant = metodoBusqueda.value === 'codigo' ? cantidadScan.value : cantidadNom.value;
-  const precioSimulado = 15.50;
+// --- BÚSQUEDA DE PRODUCTOS ---
+const simularBusqueda = async () => {
+  const term = metodoBusqueda.value === 'codigo' ? codigoInput.value : nombreBusq.value
+  if (!term) return
 
-  // Revisar si ya existe
-  const index = carrito.value.findIndex(item => item.codigo === 'SIM-001')
-  
+  buscando.value = true
+  errorBusqueda.value = ''
+  resultadosBusqueda.value = []
+
+  try {
+    let resultados = []
+
+    if (metodoBusqueda.value === 'codigo') {
+      resultados = await posService.buscarPorCodigo(term)
+      if (resultados.length === 1) {
+        // Código exacto → agregar directo al carrito
+        agregarAlCarrito(resultados[0], cantidadScan.value)
+        codigoInput.value = ''
+        cantidadScan.value = 1
+        return
+      }
+    } else {
+      resultados = await posService.buscarPorNombre(term)
+    }
+
+    if (resultados.length === 0) {
+      errorBusqueda.value = `No se encontró ningún producto con "${term}"`
+    } else {
+      resultadosBusqueda.value = resultados
+    }
+  } catch (e) {
+    errorBusqueda.value = 'Error al buscar producto'
+    console.error(e)
+  } finally {
+    buscando.value = false
+  }
+}
+
+const agregarAlCarrito = (producto, cantidad = 1) => {
+  if (producto.stock <= 0) {
+    alert(`⚠️ "${producto.nombre}" no tiene stock disponible`)
+    return
+  }
+
+  const index = carrito.value.findIndex(i => i.producto_id === producto.id)
+
   if (index !== -1) {
-    carrito.value[index].cantidad += cant
+    const nuevaCantidad = carrito.value[index].cantidad + cantidad
+    if (nuevaCantidad > producto.stock) {
+      alert(`⚠️ Stock insuficiente. Disponible: ${producto.stock}`)
+      return
+    }
+    carrito.value[index].cantidad = nuevaCantidad
     recalcularSubtotal(carrito.value[index])
   } else {
     carrito.value.push({
-      producto_id: 1,
-      codigo: 'SIM-001',
-      nombre: `Producto Escaneado (${term})`,
-      precio_unitario: precioSimulado,
-      cantidad: cant,
-      subtotal: precioSimulado * cant
+      producto_id: producto.id,
+      codigo: producto.codigo,
+      nombre: producto.nombre,
+      precio_unitario: producto.precio_venta,
+      precio_compra: producto.precio_compra,
+      stock_disponible: producto.stock,
+      cantidad: cantidad,
+      subtotal: producto.precio_venta * cantidad
     })
   }
 
-  // Limpiar inputs
-  codigoInput.value = ''
+  // Limpiar búsqueda
+  resultadosBusqueda.value = []
   nombreBusq.value = ''
-  cantidadScan.value = 1
   cantidadNom.value = 1
 }
 
 const recalcularSubtotal = (item) => {
   if (item.cantidad < 1) item.cantidad = 1
+  if (item.cantidad > item.stock_disponible) item.cantidad = item.stock_disponible
   item.subtotal = item.cantidad * item.precio_unitario
 }
 
@@ -272,34 +356,58 @@ const eliminarDelCarrito = (index) => {
 }
 
 const cancelarVenta = () => {
-  if(confirm("¿Estás seguro de cancelar esta venta?")) {
+  if (confirm('¿Estás seguro de cancelar esta venta?')) {
     carrito.value = []
     descuento.value = 0
     montoRecibido.value = 0
     notasVenta.value = ''
     ventaOk.value = null
+    resultadosBusqueda.value = []
   }
 }
 
-const procesarVenta = () => {
+// --- PROCESAR VENTA REAL ---
+const procesarVenta = async () => {
   if (!puedeCobrar.value) return
 
-  // Aquí enviaremos el payload a FastAPI (procesar_venta)
-  // Simulamos el éxito:
-  ventaOk.value = {
-    numero: 'V-00' + Math.floor(Math.random() * 1000),
-    total: total.value,
-    cambio: cambio.value
-  }
+  procesando.value = true
+  try {
+    const payload = {
+      items: carrito.value.map(item => ({
+        producto_id: item.producto_id,
+        cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        precio_compra: item.precio_compra,
+        subtotal: item.subtotal
+      })),
+      metodo_pago: metodoPago.value,
+      monto_recibido: montoRecibido.value,
+      descuento: descuento.value,
+      notas: notasVenta.value || null
+    }
 
-  // Limpiar carrito para la próxima venta
-  carrito.value = []
-  descuento.value = 0
-  montoRecibido.value = 0
-  notasVenta.value = ''
-  
-  // Actualizar stats simulados
-  ventasHoyCount.value++
-  totalHoyMonto.value += ventaOk.value.total
+    const resultado = await posService.procesarVenta(payload)
+
+    ventaOk.value = {
+      numero: resultado.numero_venta,
+      total: resultado.total,
+      cambio: resultado.cambio || 0
+    }
+
+    // Actualizar resumen del día
+    ventasHoyCount.value++
+    totalHoyMonto.value += resultado.total
+
+    // Limpiar carrito
+    carrito.value = []
+    descuento.value = 0
+    montoRecibido.value = 0
+    notasVenta.value = ''
+
+  } catch (e) {
+    alert('❌ Error al procesar venta: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    procesando.value = false
+  }
 }
 </script>

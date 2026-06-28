@@ -114,3 +114,78 @@ def anular_venta(venta_id: int):
 
     supabase.table("ventas").update({"estado": "anulada"}).eq("id", venta_id).execute()
     return {"success": True, "mensaje": "Venta anulada y stock revertido"}
+
+@router.get("/{venta_id}/detalle")
+def get_detalle_venta(venta_id: int):
+    detalles = supabase.table("detalle_ventas")\
+        .select("*, productos(nombre, codigo)")\
+        .eq("venta_id", venta_id)\
+        .execute()
+
+    items = []
+    for d in detalles.data:
+        prod = d.get("productos") or {}
+        items.append({
+            "nombre": prod.get("nombre", "Desconocido"),
+            "cantidad": d["cantidad"],
+            "precio": d["precio_unitario"],
+            "subtotal": d["subtotal"]
+        })
+    return items
+
+
+@router.get("/{venta_id}/pdf")
+def descargar_pdf(venta_id: int):
+    from fastapi.responses import StreamingResponse
+    from fpdf import FPDF
+    import io
+
+    # Datos de la venta
+    venta = supabase.table("ventas").select("*").eq("id", venta_id).execute()
+    if not venta.data:
+        raise HTTPException(status_code=404, detail="Venta no encontrada")
+    v = venta.data[0]
+
+    detalles = supabase.table("detalle_ventas")\
+        .select("*, productos(nombre)")\
+        .eq("venta_id", venta_id).execute()
+
+    # Generar PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "FACTURA DE VENTA", ln=True, align="C")
+    pdf.set_font("Helvetica", size=11)
+    pdf.cell(0, 8, f"Nro: {v['numero_venta']}", ln=True)
+    pdf.cell(0, 8, f"Fecha: {v['fecha']}", ln=True)
+    pdf.cell(0, 8, f"Metodo de pago: {v['metodo_pago']}", ln=True)
+    pdf.ln(5)
+
+    # Tabla de productos
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(90, 8, "Producto", border=1)
+    pdf.cell(25, 8, "Cant.", border=1, align="C")
+    pdf.cell(35, 8, "P. Unit.", border=1, align="R")
+    pdf.cell(35, 8, "Subtotal", border=1, align="R")
+    pdf.ln()
+
+    pdf.set_font("Helvetica", size=10)
+    for d in detalles.data:
+        nombre = (d.get("productos") or {}).get("nombre", "—")
+        pdf.cell(90, 8, nombre[:40], border=1)
+        pdf.cell(25, 8, str(d["cantidad"]), border=1, align="C")
+        pdf.cell(35, 8, f"Bs. {d['precio_unitario']:.2f}", border=1, align="R")
+        pdf.cell(35, 8, f"Bs. {d['subtotal']:.2f}", border=1, align="R")
+        pdf.ln()
+
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 10, f"TOTAL: Bs. {v['total']:.2f}", align="R")
+
+    # Devolver como stream
+    buffer = io.BytesIO(pdf.output())
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Venta_{v['numero_venta']}.pdf"}
+    )

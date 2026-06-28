@@ -63,9 +63,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import authService from '@/services/authService' // <-- Importa tu servicio
+import { useAuthStore } from '@/stores/authStore' // ← store, no service directo
 
 const router = useRouter()
+const authStore = useAuthStore()
+
 const username = ref('')
 const password = ref('')
 const isLoading = ref(false)
@@ -79,13 +81,15 @@ const handleLogin = async () => {
   errorMessage.value = ''
 
   try {
-    // Llama al backend real a través de tu servicio
-    await authService.login(username.value, password.value)
-    
-    // Si no lanza error, el authService ya guardó el token y el user en localStorage
-    router.push('/')
+    // ✅ Llama al store — actualiza Pinia + localStorage
+    const result = await authStore.login(username.value, password.value)
+
+    if (result.success) {
+      router.push('/')
+    } else {
+      errorMessage.value = result.message || 'Credenciales incorrectas'
+    }
   } catch (error) {
-    // Muestra el mensaje de error que viene del backend o de Axios
     errorMessage.value = typeof error === 'string' ? error : 'Error al conectar con el servidor'
   } finally {
     isLoading.value = false

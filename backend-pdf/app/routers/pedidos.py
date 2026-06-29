@@ -81,7 +81,138 @@ def crear_pedido(pedido: PedidoCreate):
 
     return {"success": True, "numero": numero, "pedido_id": pedido_id}
 
+@router.get("/{pedido_id}/nota-venta")
+def nota_venta_pdf(pedido_id: int):
+    """PDF del recibo final — solo disponible si el pedido fue entregado"""
+    from fpdf import FPDF
 
+    # Obtener pedido
+    pedido_result = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
+    if not pedido_result.data:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    p = pedido_result.data[0]
+
+    if not p.get("venta_id"):
+        raise HTTPException(status_code=400, detail="Este pedido aún no tiene venta asociada")
+
+    # Obtener venta
+    venta_result = supabase.table("ventas").select("*").eq("id", p["venta_id"]).execute()
+    if not venta_result.data:
+        raise HTTPException(status_code=404, detail="Venta no encontrada")
+    v = venta_result.data[0]
+
+    # Obtener detalle de venta con productos
+    detalle = supabase.table("detalle_ventas")\
+        .select("*, productos(nombre)")\
+        .eq("venta_id", p["venta_id"]).execute()
+
+    # ── Generar PDF ──────────────────────────────────────────────
+    pdf = FPDF(format="A5")
+    pdf.add_page()
+    pdf.set_margins(12, 12, 12)
+    ancho = pdf.w - 24
+
+    # Header naranja
+    pdf.set_fill_color(255, 107, 43)
+    pdf.rect(0, 0, pdf.w, 30, style="F")
+    pdf.set_y(6)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 8, "ALMACEN GLORIA", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 6, "Nota de Venta", ln=True, align="C")
+
+    # Info
+    pdf.set_y(34)
+    pdf.set_text_color(60, 60, 60)
+    pdf.set_font("Helvetica", "", 8)
+
+    col = ancho / 2
+    pdf.cell(col, 6, f"N° Venta: {v['numero_venta']}")
+    pdf.cell(col, 6, f"Fecha: {v['fecha'][:10]}", ln=True, align="R")
+    pdf.cell(col, 6, f"N° Pedido: {p['numero']}")
+    pdf.cell(col, 6, f"Método: {v['metodo_pago'].upper()}", ln=True, align="R")
+
+    pdf.set_font("Helvetica", "B", 9)
+    pdf.set_text_color(40, 40, 40)
+    cliente = p.get("cliente") or "Consumidor final"
+    pdf.cell(0, 7, f"Cliente: {cliente}", ln=True)
+    if p.get("vendedor"):
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(0, 5, f"Vendedor: {p['vendedor']}", ln=True)
+    pdf.ln(2)
+
+    # Línea divisora
+    pdf.set_draw_color(255, 107, 43)
+    pdf.set_line_width(0.5)
+    pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
+    pdf.ln(3)
+
+    # Cabecera tabla
+    pdf.set_fill_color(255, 235, 210)
+    pdf.set_text_color(150, 60, 0)
+    pdf.set_font("Helvetica", "B", 8)
+    col_prod   = ancho * 0.42
+    col_cant   = ancho * 0.13
+    col_precio = ancho * 0.22
+    col_sub    = ancho * 0.23
+    pdf.cell(col_prod,  7, "PRODUCTO",  fill=True)
+    pdf.cell(col_cant,  7, "CANT.",     fill=True, align="C")
+    pdf.cell(col_precio,7, "P.UNIT.",   fill=True, align="R")
+    pdf.cell(col_sub,   7, "SUBTOTAL",  fill=True, align="R", ln=True)
+
+    # Filas productos
+    pdf.set_text_color(40, 40, 40)
+    pdf.set_font("Helvetica", "", 8)
+    fill = False
+    for d in detalle.data:
+        nombre = (d.get("productos") or {}).get("nombre", "—")
+        sub = float(d["subtotal"])
+        pdf.set_fill_color(252, 248, 244) if fill else pdf.set_fill_color(255, 255, 255)
+        pdf.cell(col_prod,  6, nombre[:28],                          fill=True)
+        pdf.cell(col_cant,  6, str(d["cantidad"]),                   fill=True, align="C")
+        pdf.cell(col_precio,6, f"Bs. {float(d['precio_unitario']):.2f}", fill=True, align="R")
+        pdf.cell(col_sub,   6, f"Bs. {sub:.2f}",                    fill=True, align="R", ln=True)
+        fill = not fill
+
+    pdf.ln(2)
+    pdf.set_draw_color(200, 200, 200)
+    pdf.set_line_width(0.3)
+    pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
+    pdf.ln(3)
+
+    # Total
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(255, 107, 43)
+    pdf.cell(ancho - col_sub, 8, "TOTAL PAGADO:", align="R")
+    pdf.set_text_color(40, 40, 40)
+    pdf.cell(col_sub, 8, f"Bs. {float(v['total']):.2f}", align="R", ln=True)
+
+    # Cambio si hubo
+    if v.get("cambio") and float(v["cambio"]) > 0:
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(ancho - col_sub, 6, "Cambio:", align="R")
+        pdf.cell(col_sub, 6, f"Bs. {float(v['cambio']):.2f}", align="R", ln=True)
+
+    pdf.ln(5)
+    pdf.set_draw_color(255, 107, 43)
+    pdf.set_line_width(0.5)
+    pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
+    pdf.ln(4)
+
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(0, 5, "¡Gracias por su compra!", ln=True, align="C")
+    pdf.cell(0, 5, "Almacen Gloria — su tienda de confianza", ln=True, align="C")
+
+    buffer = io.BytesIO(pdf.output())
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=nota_venta_{v['numero_venta']}.pdf"}
+    )
 # ── Rutas CON parámetros dinámicos DESPUÉS ──────────────────────────
 
 @router.get("/{pedido_id}")
@@ -195,6 +326,7 @@ def editar_pedido(pedido_id: int, data: dict):
         }).execute()
 
     return {"success": True, "mensaje": "Pedido actualizado"}
+
 @router.get("/{pedido_id}/pdf")
 def descargar_pdf_pedido(pedido_id: int):
     from fpdf import FPDF

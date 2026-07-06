@@ -17,6 +17,7 @@ class ProductoCreate(BaseModel):
     stock: int = 0
     stock_minimo: int = 5
     unidad: str = "unidad"
+    unidades_por_caja: int = 1
 
 class ProductoUpdate(BaseModel):
     nombre: Optional[str] = None
@@ -25,6 +26,8 @@ class ProductoUpdate(BaseModel):
     precio_venta: Optional[float] = None
     stock: Optional[int] = None
     stock_minimo: Optional[int] = None
+    unidades_por_caja: Optional[int] = None
+    unidad: Optional[str] = None  # ✅ CAMPO AGREGADO PARA PERMITIR LA ACTUALIZACIÓN
 
 
 # ── Rutas SIN parámetros dinámicos primero ──────────────────────
@@ -35,10 +38,11 @@ def get_productos():
         .select("*, categorias(nombre)")\
         .eq("activo", True)\
         .execute()
+    
     productos = []
-    for p in result.data:
-        prod = {**p}
-        prod["categoria"] = p.get("categorias", {}).get("nombre") if p.get("categorias") else None
+    for fila_producto in result.data:
+        prod = {**fila_producto}
+        prod["categoria"] = fila_producto.get("categorias", {}).get("nombre") if fila_producto.get("categorias") else None
         del prod["categorias"]
         productos.append(prod)
     return productos
@@ -85,6 +89,7 @@ def create_producto(producto: ProductoCreate):
 def update_producto(producto_id: int, producto: ProductoUpdate):
     data = {k: v for k, v in producto.dict().items() if v is not None}
     data["updated_at"] = datetime.utcnow().isoformat()
+    
     result = supabase.table("productos").update(data).eq("id", producto_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
@@ -93,11 +98,11 @@ def update_producto(producto_id: int, producto: ProductoUpdate):
 
 @router.put("/productos/{producto_id}/ajuste-stock")
 def ajustar_stock(producto_id: int, data: dict):
-    prod = supabase.table("productos").select("stock, nombre").eq("id", producto_id).execute()
-    if not prod.data:
+    producto_db = supabase.table("productos").select("stock, nombre").eq("id", producto_id).execute()
+    if not producto_db.data:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
-    stock_actual = prod.data[0]["stock"]
+    stock_actual = producto_db.data[0]["stock"]
     tipo = data.get("tipo", "ajuste")
     cantidad = data["cantidad"]
 
@@ -141,13 +146,12 @@ def registrar_compra(data: dict):
     numero = f"C-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
     total = sum(item["subtotal"] for item in data["items"])
 
-    # ✅ Ahora incluye proveedor_id
     compra = supabase.table("compras").insert({
         "numero_compra": numero,
         "total": total,
         "notas": data.get("notas", ""),
         "estado": "completada",
-        "proveedor_id": data.get("proveedor_id")  # ← nuevo
+        "proveedor_id": data.get("proveedor_id")
     }).execute()
 
     compra_id = compra.data[0]["id"]
@@ -161,8 +165,8 @@ def registrar_compra(data: dict):
             "subtotal": item["subtotal"]
         }).execute()
 
-        prod = supabase.table("productos").select("stock").eq("id", item["productoId"]).execute()
-        nuevo_stock = prod.data[0]["stock"] + item["cantidad"]
+        producto_db = supabase.table("productos").select("stock").eq("id", item["productoId"]).execute()
+        nuevo_stock = producto_db.data[0]["stock"] + item["cantidad"]
         supabase.table("productos").update({"stock": nuevo_stock}).eq("id", item["productoId"]).execute()
 
         supabase.table("inventario_movimientos").insert({

@@ -410,4 +410,23 @@ const procesarVenta = async () => {
     procesando.value = false
   }
 }
+// Agrega este import
+import { useCajaStore } from '@/stores/cajaStore'
+const cajaStore = useCajaStore()
+
+// En procesarVenta(), agrega caja_id:
+const payload = {
+  items: carrito.value.map(item => ({
+    producto_id: item.producto_id,
+    cantidad: item.cantidad,
+    precio_unitario: item.precio_unitario,
+    precio_compra: item.precio_compra,
+    subtotal: item.subtotal
+  })),
+  metodo_pago: metodoPago.value,
+  monto_recibido: montoRecibido.value,
+  descuento: descuento.value,
+  notas: notasVenta.value || null,
+  caja_id: cajaStore.cajaId  // ← agrega esto
+}
 </script>

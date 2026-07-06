@@ -10,7 +10,8 @@ load_dotenv()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Lee la clave desde las variables de entorno de forma segura
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-solo-para-dev")
+
 ALGORITHM = "HS256"
 
 def verify_password(plain_password, hashed_password):

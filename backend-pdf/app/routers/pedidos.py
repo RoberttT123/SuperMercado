@@ -81,6 +81,71 @@ def crear_pedido(pedido: PedidoCreate):
 
     return {"success": True, "numero": numero, "pedido_id": pedido_id}
 
+@router.get("/{pedido_id}/pdf")
+def descargar_pdf_pedido(pedido_id: int):
+    from fpdf import FPDF
+
+    pedido = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
+    if not pedido.data:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    p = pedido.data[0]
+
+    detalle = supabase.table("detalle_pedidos")\
+        .select("*, productos(nombre)")\
+        .eq("pedido_id", pedido_id).execute()
+
+    pdf = FPDF(format="A5")
+    pdf.add_page()
+    pdf.set_margins(12, 12, 12)
+
+    pdf.set_fill_color(255, 107, 43)
+    pdf.rect(0, 0, pdf.w, 28, style="F")
+    pdf.set_y(6)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 8, "ALMACEN GLORIA", ln=True, align="C")
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 6, "Hoja de Pedido", ln=True, align="C")
+
+    pdf.set_y(32)
+    pdf.set_text_color(60, 60, 60)
+    pdf.set_font("Helvetica", "", 8)
+    pdf.cell(0, 6, f"N° Pedido: {p['numero']}", ln=True)
+    pdf.cell(0, 6, f"Cliente: {p['cliente']}", ln=True)
+    pdf.cell(0, 6, f"Vendedor: {p.get('vendedor', '-')}", ln=True)
+    pdf.cell(0, 6, f"Fecha: {p['fecha'][:10]}", ln=True)
+    if p.get("notas"):
+        pdf.cell(0, 6, f"Notas: {p['notas']}", ln=True)
+    pdf.ln(3)
+
+    ancho = pdf.w - 24
+    pdf.set_fill_color(255, 235, 210)
+    pdf.set_text_color(150, 60, 0)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.cell(ancho * 0.6, 7, "PRODUCTO", fill=True)
+    pdf.cell(ancho * 0.2, 7, "CANT.", fill=True, align="C")
+    pdf.cell(ancho * 0.2, 7, "P. VENTA", fill=True, align="R", ln=True)
+
+    pdf.set_text_color(40, 40, 40)
+    pdf.set_font("Helvetica", "", 8)
+    for d in detalle.data:
+        nombre = (d.get("productos") or {}).get("nombre", "-")
+        pdf.cell(ancho * 0.6, 6, nombre[:30])
+        pdf.cell(ancho * 0.2, 6, str(d["cantidad"]), align="C")
+        pdf.cell(ancho * 0.2, 6, f"Bs. {d['precio_venta']:.2f}", align="R", ln=True)
+
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(0, 5, "Pedido pendiente de entrega  Almacen Gloria", ln=True, align="C")
+
+    buffer = io.BytesIO(pdf.output())
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=pedido_{p['numero']}.pdf"}
+    )
+
 @router.get("/{pedido_id}/nota-venta")
 def nota_venta_pdf(pedido_id: int):
     """PDF del recibo final — solo disponible si el pedido fue entregado"""
@@ -205,7 +270,7 @@ def nota_venta_pdf(pedido_id: int):
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 5, "¡Gracias por su compra!", ln=True, align="C")
-    pdf.cell(0, 5, "Almacen Gloria — su tienda de confianza", ln=True, align="C")
+    pdf.cell(0, 5, "Almacen Gloria Su tienda de confianza", ln=True, align="C")
 
     buffer = io.BytesIO(pdf.output())
     return StreamingResponse(
@@ -327,67 +392,3 @@ def editar_pedido(pedido_id: int, data: dict):
 
     return {"success": True, "mensaje": "Pedido actualizado"}
 
-@router.get("/{pedido_id}/pdf")
-def descargar_pdf_pedido(pedido_id: int):
-    from fpdf import FPDF
-
-    pedido = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
-    if not pedido.data:
-        raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    p = pedido.data[0]
-
-    detalle = supabase.table("detalle_pedidos")\
-        .select("*, productos(nombre)")\
-        .eq("pedido_id", pedido_id).execute()
-
-    pdf = FPDF(format="A5")
-    pdf.add_page()
-    pdf.set_margins(12, 12, 12)
-
-    pdf.set_fill_color(255, 107, 43)
-    pdf.rect(0, 0, pdf.w, 28, style="F")
-    pdf.set_y(6)
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 8, "ALMACEN GLORIA", ln=True, align="C")
-    pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 6, "Hoja de Pedido", ln=True, align="C")
-
-    pdf.set_y(32)
-    pdf.set_text_color(60, 60, 60)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.cell(0, 6, f"N° Pedido: {p['numero']}", ln=True)
-    pdf.cell(0, 6, f"Cliente: {p['cliente']}", ln=True)
-    pdf.cell(0, 6, f"Vendedor: {p.get('vendedor', '—')}", ln=True)
-    pdf.cell(0, 6, f"Fecha: {p['fecha'][:10]}", ln=True)
-    if p.get("notas"):
-        pdf.cell(0, 6, f"Notas: {p['notas']}", ln=True)
-    pdf.ln(3)
-
-    ancho = pdf.w - 24
-    pdf.set_fill_color(255, 235, 210)
-    pdf.set_text_color(150, 60, 0)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(ancho * 0.6, 7, "PRODUCTO", fill=True)
-    pdf.cell(ancho * 0.2, 7, "CANT.", fill=True, align="C")
-    pdf.cell(ancho * 0.2, 7, "P. VENTA", fill=True, align="R", ln=True)
-
-    pdf.set_text_color(40, 40, 40)
-    pdf.set_font("Helvetica", "", 8)
-    for d in detalle.data:
-        nombre = (d.get("productos") or {}).get("nombre", "—")
-        pdf.cell(ancho * 0.6, 6, nombre[:30])
-        pdf.cell(ancho * 0.2, 6, str(d["cantidad"]), align="C")
-        pdf.cell(ancho * 0.2, 6, f"Bs. {d['precio_venta']:.2f}", align="R", ln=True)
-
-    pdf.ln(4)
-    pdf.set_font("Helvetica", "I", 8)
-    pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 5, "Pedido pendiente de entrega — Almacen Gloria", ln=True, align="C")
-
-    buffer = io.BytesIO(pdf.output())
-    return StreamingResponse(
-        buffer,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=pedido_{p['numero']}.pdf"}
-    )

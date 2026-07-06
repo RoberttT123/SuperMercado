@@ -1,10 +1,11 @@
-# Node (Frontend)
-node_modules/
-dist/
-.env
+# Backend
+backend-pdf/venv/
+backend-pdf/__pycache__/
+backend-pdf/.env
+backend-pdf/*.pyc
 
-# Python (Backend)
-venv/
-__pycache__/
-*.pyc
-.env
+# Frontend
+frontend-vue/node_modules/
+frontend-vue/dist/
+frontend-vue/.env.local
+frontend-vue/.env.production

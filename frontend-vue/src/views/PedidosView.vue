@@ -40,7 +40,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-1">👤 Nombre del cliente *</label>
-            <input v-model="formPedido.cliente" type="text" placeholder="Ej: Doña Rosa"
+            <input v-model="formPedido.cliente" type="text" placeholder="Ej: Don Solomeo Paredes"
               class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-base">
           </div>
           <div>

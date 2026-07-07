@@ -33,9 +33,7 @@
 
     <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#FFE0CC]">
 
-      <!-- ══════════════════════════════════════════════
-           TAB: ABRIR
-      ══════════════════════════════════════════════ -->
+      <!-- TAB: ABRIR -->
       <div v-if="activeTab === 'abrir'">
         <h2 class="text-lg font-bold text-[#FF6B2B] mb-4">Apertura de Caja</h2>
         <div v-if="cajaStore.cajaAbierta" class="text-gray-500 bg-gray-50 p-4 rounded-lg border border-gray-200">
@@ -52,25 +50,18 @@
             <input v-model="formApertura.usuario" type="text"
               class="w-full p-2 border rounded-lg focus:outline-none focus:border-[#FF6B2B]">
           </div>
-          <button
-            @click="abrirCaja"
-            :disabled="cargando"
+          <button @click="abrirCaja" :disabled="cargando"
             class="col-span-2 bg-[#FF6B2B] text-white font-bold py-3 rounded-lg hover:bg-[#E85D04] disabled:opacity-50 transition-colors">
             {{ cargando ? '⏳ Abriendo...' : '🟢 Abrir Caja Ahora' }}
           </button>
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════
-           TAB: CERRAR
-      ══════════════════════════════════════════════ -->
+      <!-- TAB: CERRAR -->
       <div v-if="activeTab === 'cerrar'">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-lg font-bold text-[#FF6B2B]">Cierre y Arqueo</h2>
-          <button
-            v-if="cajaStore.cajaAbierta"
-            @click="cargarResumen"
-            :disabled="cargandoResumen"
+          <button v-if="cajaStore.cajaAbierta" @click="cargarResumen" :disabled="cargandoResumen"
             class="text-sm bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
             {{ cargandoResumen ? '⏳ Actualizando...' : '🔄 Actualizar ventas' }}
           </button>
@@ -81,7 +72,7 @@
         </div>
 
         <div v-else>
-          <!-- Resumen de ventas -->
+          <!-- Resumen KPIs -->
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div class="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
               <div class="text-xs text-gray-500 mb-1">Transacciones</div>
@@ -101,25 +92,30 @@
             </div>
           </div>
 
-          <!-- Detalle de últimas ventas en caja -->
+          <!-- Últimas ventas de la caja -->
           <div v-if="ultimasVentasCaja.length > 0" class="mb-6">
             <div class="flex justify-between items-center mb-2">
-              <div class="text-sm font-bold text-gray-600">Últimas ventas de esta caja</div>
-              <span class="text-xs text-gray-400">{{ ultimasVentasCaja.length }} venta(s)</span>
+              <div class="text-sm font-bold text-gray-600">Ventas de esta caja</div>
+              <span class="text-xs text-gray-400">{{ ultimasVentasCaja.length }} registros</span>
             </div>
-            <div class="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+            <div class="border border-gray-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
               <div v-for="v in ultimasVentasCaja" :key="v.id"
                 class="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 text-sm">
                 <div>
                   <span class="font-bold text-[#FF6B2B]">{{ v.numero_venta }}</span>
-                  <span class="text-gray-400 ml-2">{{ formatoFecha(v.fecha) }}</span>
+                  <span class="text-gray-400 ml-2 text-xs">{{ formatoFecha(v.fecha) }}</span>
                 </div>
                 <div class="flex items-center gap-3">
                   <span class="text-xs capitalize text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{{ v.metodo_pago }}</span>
                   <span class="font-bold">Bs. {{ v.total.toFixed(2) }}</span>
+                  <span v-if="v.estado === 'anulada'" class="text-xs text-red-500 font-bold">ANULADA</span>
                 </div>
               </div>
             </div>
+          </div>
+
+          <div v-else-if="!cargandoResumen" class="mb-6 text-center py-4 text-gray-400 bg-gray-50 rounded-xl border border-gray-200 text-sm">
+            No hay ventas registradas en esta caja todavía.
           </div>
 
           <!-- Arqueo -->
@@ -154,26 +150,21 @@
             </span>
           </div>
 
-          <button
-            @click="cerrarCaja"
-            :disabled="cargando"
+          <button @click="cerrarCaja" :disabled="cargando"
             class="w-full bg-[#FF6B2B] text-white font-bold py-3 rounded-lg hover:bg-[#E85D04] disabled:opacity-50 transition-colors">
             {{ cargando ? '⏳ Cerrando...' : '🔴 Cerrar Caja' }}
           </button>
         </div>
       </div>
 
-      <!-- ══════════════════════════════════════════════
-           TAB: HISTORIAL
-      ══════════════════════════════════════════════ -->
+      <!-- TAB: HISTORIAL -->
       <div v-if="activeTab === 'historial'">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-lg font-bold text-[#FF6B2B]">Historial de Cajas</h2>
-          <!-- ✅ Cámbialo por esto -->
-        <button @click="actualizarHistorial"
-          class="text-sm bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg transition-colors">
-          🔄 Actualizar
-        </button>
+          <button @click="actualizarHistorial"
+            class="text-sm bg-gray-100 hover:bg-gray-200 font-bold px-4 py-2 rounded-lg transition-colors">
+            🔄 Actualizar
+          </button>
         </div>
 
         <div v-if="historial.length === 0"
@@ -215,7 +206,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useCajaStore } from '@/stores/cajaStore'
 import cajaService from '@/services/cajaService'
@@ -249,14 +240,23 @@ const notasCierre = ref('')
 const montoEsperado = computed(() =>
   (cajaStore.montoInicial || 0) + (resumen.value?.efectivo || 0)
 )
-
 const diferencia = computed(() =>
   montoContado.value - montoEsperado.value
 )
 
+// ── AUTO-REFRESH ─────────────────────────────────────────────────────
+let intervalo = null
+
 // ── CARGA INICIAL ────────────────────────────────────────────────────
 onMounted(async () => {
   await cargarEstado()
+})
+
+onUnmounted(() => {
+  if (intervalo) {
+    clearInterval(intervalo)
+    intervalo = null
+  }
 })
 
 const cargarEstado = async () => {
@@ -268,12 +268,23 @@ const cargarEstado = async () => {
   historial.value = await cajaService.getHistorial()
 }
 
-// ✅ Refresca resumen al cambiar de tab
+// ✅ Refresca al cambiar de tab + auto-refresh en tab cerrar
 watch(activeTab, async (tab) => {
+  if (intervalo) {
+    clearInterval(intervalo)
+    intervalo = null
+  }
+
   if (tab === 'cerrar' && cajaStore.cajaId) {
     await cargarResumen()
     await cargarUltimasVentas()
+    // Auto-refresh cada 30 segundos
+    intervalo = setInterval(async () => {
+      await cargarResumen()
+      await cargarUltimasVentas()
+    }, 30000)
   }
+
   if (tab === 'historial') {
     historial.value = await cajaService.getHistorial()
   }
@@ -293,17 +304,20 @@ const cargarResumen = async () => {
   }
 }
 
-// ✅ Cargar últimas ventas de la caja actual
 const cargarUltimasVentas = async () => {
   if (!cajaStore.cajaId) return
   try {
-    const res = await api.get(`/ventas/`, {
-      params: { caja_id: cajaStore.cajaId, limit: 10 }
+    const res = await api.get('/ventas/', {
+      params: { caja_id: cajaStore.cajaId, limit: 20 }
     })
     ultimasVentasCaja.value = res.data
   } catch (e) {
     console.error('Error cargando ventas de caja:', e)
   }
+}
+
+const actualizarHistorial = async () => {
+  historial.value = await cajaService.getHistorial()
 }
 
 // ── ACCIONES ─────────────────────────────────────────────────────────
@@ -325,9 +339,7 @@ const abrirCaja = async () => {
     cargando.value = false
   }
 }
-const actualizarHistorial = async () => {
-  historial.value = await cajaService.getHistorial()
-}
+
 const cerrarCaja = async () => {
   if (!confirm('¿Confirmas el cierre de caja?')) return
   cargando.value = true
@@ -343,6 +355,7 @@ const cerrarCaja = async () => {
     ultimasVentasCaja.value = []
     montoContado.value = 0
     notasCierre.value = ''
+    if (intervalo) { clearInterval(intervalo); intervalo = null }
     historial.value = await cajaService.getHistorial()
     activeTab.value = 'historial'
   } catch (e) {

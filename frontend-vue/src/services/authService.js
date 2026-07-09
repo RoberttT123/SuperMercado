@@ -3,7 +3,6 @@ import api from './api';
 const authService = {
   async login(username, password) {
     try {
-      // ✅ OAuth2 requiere form-urlencoded, no JSON
       const formData = new URLSearchParams();
       formData.append("username", username);
       formData.append("password", password);
@@ -12,12 +11,11 @@ const authService = {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
 
-      // ✅ El backend devuelve access_token, no token
       if (response.data.access_token) {
         localStorage.setItem('token', response.data.access_token);
         localStorage.setItem('user', JSON.stringify({
-          username: username,
-          role: response.data.role  // lo agregaremos en el backend
+          username: response.data.username,
+          role: response.data.role
         }));
       }
       return response.data;
@@ -26,10 +24,10 @@ const authService = {
     }
   },
 
+  // ✅ Solo limpia storage — la navegación la maneja el store
   logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = '/login';
   },
 
   getCurrentUser() {

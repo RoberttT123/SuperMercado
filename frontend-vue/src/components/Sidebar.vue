@@ -42,7 +42,7 @@
           />
           <div v-else class="w-20 h-20 rounded-full mx-auto mb-3 bg-white flex items-center justify-center text-3xl">🛒</div>
 
-          <h1 class="text-white font-black text-base tracking-wide uppercase">Almacen Gloria</h1>
+          <h1 class="text-white font-black text-base tracking-wide uppercase">Almacen Cori</h1>
           <p class="text-white/70 text-xs italic mt-1">Precio, calidad y confianza.</p>
         </div>
 
@@ -90,7 +90,7 @@
           🚪 Cerrar Sesión
         </button>
         <div class="text-center text-[10px] text-[#9A857A] mt-3">
-          Almacen Gloria &bull; Beni
+          Almacen Cori &bull; Beni
         </div>
       </div>
     </aside>
@@ -125,7 +125,7 @@
         />
         <div v-else class="w-[100px] h-[100px] rounded-full mx-auto mb-2 bg-white flex items-center justify-center text-2xl">🛒</div>
 
-        <h1 v-if="!isCollapsed" class="text-white font-black text-sm tracking-[0.1em] mt-2 uppercase">Almacen Gloria</h1>
+        <h1 v-if="!isCollapsed" class="text-white font-black text-sm tracking-[0.1em] mt-2 uppercase">Almacen Cori</h1>
         <p v-if="!isCollapsed" class="text-[#FFE4D4] text-[10px] italic mt-1">Precio, calidad y confianza.</p>
       </div>
 
@@ -200,7 +200,7 @@
       </button>
 
       <div v-if="!isCollapsed" class="text-center text-[9px] text-[#9A857A] px-4">
-        Almacen Gloria &bull; Beni
+        Almacen Cori &bull; Beni
       </div>
     </div>
   </aside>

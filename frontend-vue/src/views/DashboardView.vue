@@ -221,7 +221,7 @@
     </div>
 
     <footer class="mt-4 pt-8 border-t border-[#FFE0CC] text-center text-gray-400 text-sm">
-      Panel Central · Almacen Gloria · Beni, Bolivia
+      Panel Central · Almacen Cori · Beni, Bolivia
     </footer>
   </div>
 </template>

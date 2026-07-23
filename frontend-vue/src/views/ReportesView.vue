@@ -171,8 +171,7 @@
                 <button 
                   @click="descargarFacturaPDF(ventaSeleccionada.id)"
                   class="w-full bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
-                >
-                  📥 Descargar PDF
+                >📥 Descargar PDF
                 </button>
               </div>
             </div>

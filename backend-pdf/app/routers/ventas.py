@@ -219,7 +219,7 @@ def descargar_pdf_venta(venta_id: int):
     pdf.set_y(6)
     pdf.set_font("Helvetica", "B", 16)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 8, "ALMACEN GLORIA", ln=True, align="C")
+    pdf.cell(0, 8, "ALMACEN CORI", ln=True, align="C")
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(0, 6, "Nota de Venta", ln=True, align="C")
 
@@ -295,7 +295,7 @@ def descargar_pdf_venta(venta_id: int):
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
     pdf.cell(0, 5, "¡Gracias por su compra!", ln=True, align="C")
-    pdf.cell(0, 5, "Almacen Gloria — su tienda de confianza", ln=True, align="C")
+    pdf.cell(0, 5, "Almacen Cori — su tienda de confianza", ln=True, align="C")
 
     buffer = io.BytesIO(pdf.output())
     return StreamingResponse(

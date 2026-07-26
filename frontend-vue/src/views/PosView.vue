@@ -66,15 +66,74 @@
           <div v-if="resultadosBusqueda.length > 0"
             class="mt-2 border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <div v-for="prod in resultadosBusqueda" :key="prod.id"
-              @click="agregarAlCarrito(prod, cantidadNom)"
-              class="flex justify-between items-center p-3 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-0 transition-colors">
-              <div>
-                <span class="font-bold text-sm">{{ prod.nombre }}</span>
-                <span class="text-xs text-gray-400 ml-2">{{ prod.codigo }}</span>
+              class="p-3 border-b border-gray-100 last:border-0 hover:bg-orange-50/50 transition-colors">
+
+              <!-- Info del producto -->
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <span class="font-bold text-sm">{{ prod.nombre }}</span>
+                  <span class="text-xs text-gray-400 ml-2">{{ prod.codigo }}</span>
+                  <span v-if="esCajaOPaqueteProducto(prod)"
+                    class="ml-2 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">
+                    📦 {{ prod.unidades_por_caja }} u/{{ prod.unidad }}
+                  </span>
+                </div>
+                <div class="text-right">
+                  <div class="font-black text-[#FF6B2B]">Bs. {{ prod.precio_venta.toFixed(2) }}/ud</div>
+                  <div class="text-xs" :class="prod.stock > prod.stock_minimo ? 'text-green-600' : prod.stock > 0 ? 'text-yellow-600' : 'text-red-500'">
+                    Stock: {{ prod.stock }} uds
+                  </div>
+                </div>
               </div>
-              <div class="text-right">
-                <span class="font-black text-[#FF6B2B]">Bs. {{ prod.precio_venta.toFixed(2) }}</span>
-                <span class="text-xs text-gray-400 ml-2">Stock: {{ prod.stock }}</span>
+
+              <!-- ✅ PRODUCTO TIPO CAJA/PAQUETE -->
+              <div v-if="esCajaOPaqueteProducto(prod)" class="bg-blue-50 rounded-xl p-3 space-y-2">
+                <div class="text-xs font-black text-blue-700 uppercase">
+                  Precio {{ prod.unidad }}: Bs. {{ ((prod.precio_venta || 0) * (prod.unidades_por_caja || 1)).toFixed(2) }}
+                </div>
+                <div class="grid grid-cols-3 gap-2 items-end">
+                  <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">
+                      N° de {{ prod.unidad === 'caja' ? 'cajas' : 'paquetes' }}
+                    </label>
+                    <input type="number" min="0"
+                      v-model.number="cajasTemp[prod.id]"
+                      class="w-full px-2 py-2 border-2 border-blue-300 rounded-lg text-center font-black text-lg focus:outline-none focus:border-blue-500 bg-white">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1">Sueltas</label>
+                    <input type="number" min="0"
+                      v-model.number="sueltasTemp[prod.id]"
+                      class="w-full px-2 py-2 border border-blue-200 rounded-lg text-center font-bold focus:outline-none focus:border-blue-400 bg-white">
+                  </div>
+                  <div class="text-center">
+                    <div class="text-xs text-gray-400 mb-1">Total uds.</div>
+                    <div class="font-black text-blue-700 text-lg">{{ calcularUnidadesPOS(prod) }}</div>
+                  </div>
+                </div>
+
+                <!-- Subtotal preview -->
+                <div v-if="calcularUnidadesPOS(prod) > 0"
+                  class="bg-blue-700 text-white rounded-lg p-2 flex justify-between items-center text-sm">
+                  <span>{{ calcularUnidadesPOS(prod) }} uds × Bs. {{ prod.precio_venta.toFixed(2) }}</span>
+                  <span class="font-black">= Bs. {{ (calcularUnidadesPOS(prod) * prod.precio_venta).toFixed(2) }}</span>
+                </div>
+
+                <button @click="agregarAlCarrito(prod)"
+                  :disabled="calcularUnidadesPOS(prod) <= 0"
+                  class="w-full bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-2 rounded-lg transition-colors disabled:opacity-40 text-sm">
+                  ➕ Agregar {{ calcularUnidadesPOS(prod) > 0 ? calcularUnidadesPOS(prod) + ' unidades' : '' }}
+                </button>
+              </div>
+
+              <!-- ✅ PRODUCTO SIMPLE -->
+              <div v-else class="flex items-center gap-3">
+                <input type="number" min="1" v-model.number="cantidadNom"
+                  class="w-20 px-2 py-1.5 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
+                <button @click="agregarAlCarrito(prod, cantidadNom)"
+                  class="flex-1 bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm">
+                  ➕ Agregar
+                </button>
               </div>
             </div>
           </div>
@@ -272,7 +331,19 @@ const montoRecibido = ref(0)
 const notasVenta = ref('')
 const ventaOk = ref(null)
 const procesando = ref(false)
+// ✅ Para manejo de cajas en POS
+const cajasTemp = ref({})        // cajas por producto
+const sueltasTemp = ref({})      // unidades sueltas por producto
 
+const esCajaOPaqueteProducto = (prod) =>
+  prod.unidad === 'caja' || prod.unidad === 'paquete'
+
+const calcularUnidadesPOS = (prod) => {
+  const cajas = cajasTemp.value[prod.id] || 0
+  const sueltas = sueltasTemp.value[prod.id] || 0
+  const uds = prod.unidades_por_caja || 1
+  return (cajas * uds) + sueltas
+}
 // --- COMPUTADOS ---
 const subtotal = computed(() =>
   carrito.value.reduce((acc, item) => acc + item.subtotal, 0)
@@ -348,15 +419,32 @@ const simularBusqueda = async () => {
     buscando.value = false
   }
 }
-
 const agregarAlCarrito = (producto, cantidad = 1) => {
+  // ✅ Para vendedores en pedidos no verificamos stock
+  // En POS sí verificamos
   if (producto.stock <= 0) {
     alert(`⚠️ "${producto.nombre}" no tiene stock disponible`)
     return
   }
+
+  // Si es caja/paquete calcular desde cajas + sueltas
+  let cantidadFinal = cantidad
+  if (esCajaOPaqueteProducto(producto)) {
+    cantidadFinal = calcularUnidadesPOS(producto)
+    if (cantidadFinal <= 0) {
+      alert('⚠️ Ingresa al menos 1 caja o unidad suelta')
+      return
+    }
+  }
+
+  if (cantidadFinal > producto.stock) {
+    alert(`⚠️ Stock insuficiente. Disponible: ${producto.stock} unidades`)
+    return
+  }
+
   const index = carrito.value.findIndex(i => i.producto_id === producto.id)
   if (index !== -1) {
-    const nuevaCantidad = carrito.value[index].cantidad + cantidad
+    const nuevaCantidad = carrito.value[index].cantidad + cantidadFinal
     if (nuevaCantidad > producto.stock) {
       alert(`⚠️ Stock insuficiente. Disponible: ${producto.stock}`)
       return
@@ -371,10 +459,14 @@ const agregarAlCarrito = (producto, cantidad = 1) => {
       precio_unitario: producto.precio_venta,
       precio_compra: producto.precio_compra,
       stock_disponible: producto.stock,
-      cantidad: cantidad,
-      subtotal: producto.precio_venta * cantidad
+      cantidad: cantidadFinal,
+      subtotal: producto.precio_venta * cantidadFinal
     })
   }
+
+  // Limpiar
+  cajasTemp.value[producto.id] = 0
+  sueltasTemp.value[producto.id] = 0
   resultadosBusqueda.value = []
   nombreBusq.value = ''
   cantidadNom.value = 1

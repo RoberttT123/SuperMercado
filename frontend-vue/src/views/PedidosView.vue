@@ -67,11 +67,17 @@
               <div class="text-xs text-gray-400">{{ prod.codigo }} · Bs. {{ prod.precio_venta.toFixed(2) }}</div>
             </div>
             <div class="flex items-center gap-3">
-              <span class="text-xs font-bold"
-                :class="prod.stock > 5 ? 'text-green-600' : prod.stock > 0 ? 'text-yellow-600' : 'text-red-500'">
-                Stock: {{ prod.stock }}
+              <!-- ✅ Info de stock — solo informativa, no bloquea -->
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                :class="prod.stock > prod.stock_minimo
+                  ? 'bg-green-100 text-green-700'
+                  : prod.stock > 0
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-red-100 text-red-500'">
+                {{ prod.stock > 0 ? `Stock: ${prod.stock}` : '⚠️ Sin stock' }}
               </span>
-              <input type="number" min="1" :max="prod.stock || 999" v-model.number="cantidadesTemp[prod.id]"
+              <input type="number" min="1"
+                v-model.number="cantidadesTemp[prod.id]"
                 class="w-16 px-2 py-1 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
               <button @click="agregarAlPedido(prod)"
                 class="bg-[#FF6B2B] text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-[#E85510] transition-colors">
@@ -609,7 +615,8 @@ const productosBuscados = computed(() => {
   const term = busquedaProducto.value.toLowerCase()
   return todosProductos.value
     .filter(p => p.nombre.toLowerCase().includes(term) || p.codigo.includes(term))
-    .slice(0, 5)
+    // ✅ Sin filtro de stock — muestra todos para logística
+    .slice(0, 8)  // ← muestra más resultados
 })
 
 const agregarAlPedido = (prod) => {

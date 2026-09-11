@@ -17,56 +17,55 @@ def get_resumen():
     mes_ini = f"{date.today().year}-{date.today().month:02d}-01T00:00:00"
     ahora = datetime.utcnow().isoformat()
 
-    # Ventas hoy
-    ventas_hoy = supabase.table("ventas").select("total, metodo_pago")\
-        .gte("fecha", hoy_ini).lte("fecha", hoy_fin)\
-        .eq("estado", "completada").execute()
-
-    # Ventas ayer
-    ventas_ayer = supabase.table("ventas").select("total")\
-        .gte("fecha", ayer_ini).lte("fecha", ayer_fin)\
-        .eq("estado", "completada").execute()
-
-    # Ventas mes
-    ventas_mes = supabase.table("ventas").select("total")\
+    # 1. Todas las ventas del mes (cubre hoy, ayer y mes en memoria)
+    ventas_mes = supabase.table("ventas").select("id, total, fecha")\
         .gte("fecha", mes_ini).lte("fecha", ahora)\
-        .eq("estado", "completada").execute()
+        .eq("estado", "completada").execute().data
 
-    # Ganancia neta del mes
-    venta_ids_mes = [v["id"] for v in supabase.table("ventas")\
-        .select("id").gte("fecha", mes_ini).eq("estado", "completada").execute().data]
+    ventas_hoy = [v for v in ventas_mes if hoy_ini <= v["fecha"] <= hoy_fin]
+    ventas_ayer = [v for v in ventas_mes if ayer_ini <= v["fecha"] <= ayer_fin]
+    venta_ids_mes = [v["id"] for v in ventas_mes]
 
+    # 2. Detalle de ventas del mes — se usa para ganancia neta Y top productos
     ganancia_neta = 0
+    top_productos = []
     if venta_ids_mes:
         detalles = supabase.table("detalle_ventas")\
-            .select("subtotal, precio_compra, cantidad")\
-            .in_("venta_id", venta_ids_mes).execute()
-        ganancia_neta = sum(
-            d["subtotal"] - (d.get("precio_compra", 0) * d["cantidad"])
-            for d in detalles.data
-        )
+            .select("producto_id, subtotal, precio_compra, cantidad, productos(nombre)")\
+            .in_("venta_id", venta_ids_mes).execute().data
 
-    # Stock crítico
+        ganancia_neta = sum(d["subtotal"] - (d.get("precio_compra", 0) * d["cantidad"]) for d in detalles)
+
+        agrupado = {}
+        for d in detalles:
+            pid = d["producto_id"]
+            nombre = (d.get("productos") or {}).get("nombre", "Desconocido")
+            if pid not in agrupado:
+                agrupado[pid] = {"nombre": nombre, "unidades": 0, "ingresos": 0}
+            agrupado[pid]["unidades"] += d["cantidad"]
+            agrupado[pid]["ingresos"] += d["subtotal"]
+        top_productos = sorted(agrupado.values(), key=lambda x: x["unidades"], reverse=True)[:5]
+
+    # 3. Stock crítico (no se puede combinar con lo anterior, tabla distinta)
     productos = supabase.table("productos").select("stock, stock_minimo")\
-        .eq("activo", True).execute()
-    criticos = sum(1 for p in productos.data if p["stock"] <= p["stock_minimo"])
+        .eq("activo", True).execute().data
+    criticos = sum(1 for p in productos if p["stock"] <= p["stock_minimo"])
 
-    total_hoy = sum(v["total"] for v in ventas_hoy.data)
-    total_ayer = sum(v["total"] for v in ventas_ayer.data)
+    total_hoy = sum(v["total"] for v in ventas_hoy)
+    total_ayer = sum(v["total"] for v in ventas_ayer)
     variacion = ((total_hoy - total_ayer) / total_ayer * 100) if total_ayer > 0 else 0
 
     return {
         "ventas_hoy": total_hoy,
-        "transacciones_hoy": len(ventas_hoy.data),
+        "transacciones_hoy": len(ventas_hoy),
         "ventas_ayer": total_ayer,
         "variacion_hoy": round(variacion, 1),
-        "ventas_mes": sum(v["total"] for v in ventas_mes.data),
-        "transacciones_mes": len(ventas_mes.data),
+        "ventas_mes": sum(v["total"] for v in ventas_mes),
+        "transacciones_mes": len(ventas_mes),
         "ganancia_neta_mes": ganancia_neta,
         "productos_criticos": criticos,
+        "top_productos": top_productos,   # ← nuevo, antes era un endpoint aparte
     }
-
-
 @router.get("/ventas-semana")
 def get_ventas_semana():
     hoy = date.today()

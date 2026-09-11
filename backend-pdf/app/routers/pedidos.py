@@ -327,29 +327,22 @@ def entregar_pedido(pedido_id: int, data: dict):
         "notas": f"Pedido {pedido.data[0]['numero']}",
         "estado": "completada"
     }).execute()
-
     venta_id = nueva_venta.data[0]["id"]
 
-    for item in items:
-        supabase.table("detalle_ventas").insert({
-            "venta_id": venta_id,
-            "producto_id": item["producto_id"],
-            "cantidad": item["cantidad"],
-            "precio_unitario": item["precio_venta"],
-            "precio_compra": item.get("precio_compra", 0),
-            "subtotal": item["subtotal"]
-        }).execute()
+    # 1 sola llamada: inserta TODO el detalle de venta de una vez
+    detalle_rows = [{
+        "venta_id": venta_id,
+        "producto_id": item["producto_id"],
+        "cantidad": item["cantidad"],
+        "precio_unitario": item["precio_venta"],
+        "precio_compra": item.get("precio_compra", 0),
+        "subtotal": item["subtotal"]
+    } for item in items]
+    supabase.table("detalle_ventas").insert(detalle_rows).execute()
 
-        prod = supabase.table("productos").select("stock").eq("id", item["producto_id"]).execute()
-        nuevo_stock = prod.data[0]["stock"] - item["cantidad"]
-        supabase.table("productos").update({"stock": nuevo_stock}).eq("id", item["producto_id"]).execute()
-
-        supabase.table("inventario_movimientos").insert({
-            "producto_id": item["producto_id"],
-            "tipo_movimiento": "egreso",
-            "cantidad": item["cantidad"],
-            "motivo": f"Venta pedido {pedido.data[0]['numero']}"
-        }).execute()
+    # 1 sola llamada: descuenta stock + registra movimientos (reutiliza procesar_venta)
+    items_json = [{"producto_id": item["producto_id"], "cantidad": item["cantidad"]} for item in items]
+    supabase.rpc("procesar_venta", {"p_items": items_json}).execute()
 
     supabase.table("pedidos").update({
         "estado": "entregado",
@@ -357,7 +350,6 @@ def entregar_pedido(pedido_id: int, data: dict):
     }).eq("id", pedido_id).execute()
 
     return {"success": True, "numero_venta": numero_venta, "total": total, "venta_id": venta_id}
-
 @router.put("/{pedido_id}/editar")
 def editar_pedido(pedido_id: int, data: dict):
     """
@@ -391,4 +383,3 @@ def editar_pedido(pedido_id: int, data: dict):
         }).execute()
 
     return {"success": True, "mensaje": "Pedido actualizado"}
-

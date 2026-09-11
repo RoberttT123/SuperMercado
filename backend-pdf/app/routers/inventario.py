@@ -153,27 +153,18 @@ def registrar_compra(data: dict):
         "estado": "completada",
         "proveedor_id": data.get("proveedor_id")
     }).execute()
-
     compra_id = compra.data[0]["id"]
 
-    for item in data["items"]:
-        supabase.table("detalle_compras").insert({
-            "compra_id": compra_id,
-            "producto_id": item["productoId"],
-            "cantidad": item["cantidad"],
-            "precio_unitario": item["precio_unitario"],
-            "subtotal": item["subtotal"]
-        }).execute()
+    detalle_rows = [{
+        "compra_id": compra_id,
+        "producto_id": item["productoId"],
+        "cantidad": item["cantidad"],
+        "precio_unitario": item["precio_unitario"],
+        "subtotal": item["subtotal"]
+    } for item in data["items"]]
+    supabase.table("detalle_compras").insert(detalle_rows).execute()
 
-        producto_db = supabase.table("productos").select("stock").eq("id", item["productoId"]).execute()
-        nuevo_stock = producto_db.data[0]["stock"] + item["cantidad"]
-        supabase.table("productos").update({"stock": nuevo_stock}).eq("id", item["productoId"]).execute()
-
-        supabase.table("inventario_movimientos").insert({
-            "producto_id": item["productoId"],
-            "tipo_movimiento": "ingreso",
-            "cantidad": item["cantidad"],
-            "motivo": f"Compra #{numero}"
-        }).execute()
+    items_json = [{"producto_id": item["productoId"], "cantidad": item["cantidad"]} for item in data["items"]]
+    supabase.rpc("procesar_compra", {"p_items": items_json}).execute()
 
     return {"success": True, "numero_compra": numero, "total": total}

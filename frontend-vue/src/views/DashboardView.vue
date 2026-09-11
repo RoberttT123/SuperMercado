@@ -264,16 +264,15 @@ const fechaHoy = new Date().toLocaleDateString('es-BO', {
 onMounted(async () => {
   cargando.value = true
   try {
-    const [r, semana, top, ultimas, stock] = await Promise.all([
+    const [r, semana, ultimas, stock] = await Promise.all([
       dashboardService.getResumen(),
       dashboardService.getVentasSemana(),
-      dashboardService.getTopProductos(),
       dashboardService.getUltimasVentas(),
       dashboardService.getStockCritico()
     ])
     resumen.value = r
     ventasSemana.value = semana
-    topProductos.value = top
+    topProductos.value = r.top_productos   // ← viene incluido en resumen ahora
     ultimasVentas.value = ultimas
     stockCritico.value = stock
 

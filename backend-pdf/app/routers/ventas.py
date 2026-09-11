@@ -47,18 +47,26 @@ def crear_venta(venta: VentaCreate):
     cambio = (venta.monto_recibido - total) if venta.monto_recibido else 0
     numero = f"V-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
 
+    # 1. Crear venta
     nueva_venta = supabase.table("ventas").insert({
-        "numero_venta": numero, "caja_id": venta.caja_id, "subtotal": subtotal,
-        "descuento": venta.descuento, "total": total, "metodo_pago": venta.metodo_pago,
-        "monto_recibido": venta.monto_recibido, "cambio": cambio, "notas": venta.notas,
+        "numero_venta": numero,
+        "caja_id": venta.caja_id,
+        "subtotal": subtotal,
+        "descuento": venta.descuento,
+        "total": total,
+        "metodo_pago": venta.metodo_pago,
+        "monto_recibido": venta.monto_recibido,
+        "cambio": cambio,
+        "notas": venta.notas,
         "estado": "completada"
     }).execute()
 
     if not nueva_venta.data:
         raise HTTPException(status_code=500, detail="Error al crear la venta")
+
     venta_id = nueva_venta.data[0]["id"]
 
-    # 1 sola llamada: inserta TODO el detalle de una vez
+    # 2. Insertar TODO el detalle en una sola llamada (batch)
     detalle_rows = [{
         "venta_id": venta_id,
         "producto_id": item.producto_id,
@@ -69,14 +77,24 @@ def crear_venta(venta: VentaCreate):
     } for item in venta.items]
     supabase.table("detalle_ventas").insert(detalle_rows).execute()
 
-    # 1 sola llamada: descuenta stock + registra movimientos de TODOS los productos
+    # 3. Descontar stock + registrar movimientos de TODOS los productos en 1 sola llamada
     items_json = [{
         "producto_id": item.producto_id,
         "cantidad": item.cantidad
     } for item in venta.items]
     supabase.rpc("procesar_venta", {"p_items": items_json}).execute()
 
-    return {"success": True, "numero_venta": numero, "total": total, "cambio": cambio, "venta_id": venta_id}
+    return {
+        "success": True,
+        "numero_venta": numero,
+        "total": total,
+        "cambio": cambio,
+        "venta_id": venta_id
+    }
+
+
+# ── Rutas CON parámetros dinámicos DESPUÉS ──────────────────────────
+
 @router.get("/{venta_id}")
 def get_venta(venta_id: int):
     venta = supabase.table("ventas")\
@@ -124,30 +142,20 @@ def anular_venta(venta_id: int):
     if venta.data[0]["estado"] == "anulada":
         raise HTTPException(status_code=400, detail="La venta ya está anulada")
 
-    # Revertir stock
+    # Traer detalle de la venta
     detalle = supabase.table("detalle_ventas")\
         .select("*")\
         .eq("venta_id", venta_id)\
         .execute()
 
-    for item in detalle.data:
-        prod = supabase.table("productos")\
-            .select("stock")\
-            .eq("id", item["producto_id"])\
-            .execute()
-        if prod.data:
-            nuevo_stock = prod.data[0]["stock"] + item["cantidad"]
-            supabase.table("productos")\
-                .update({"stock": nuevo_stock})\
-                .eq("id", item["producto_id"])\
-                .execute()
-
-            supabase.table("inventario_movimientos").insert({
-                "producto_id": item["producto_id"],
-                "tipo_movimiento": "ingreso",
-                "cantidad": item["cantidad"],
-                "motivo": f"Anulación venta #{venta.data[0]['numero_venta']}"
-            }).execute()
+    # Revertir stock + registrar movimientos en 1 sola llamada RPC
+    if detalle.data:
+        items_json = [{
+            "producto_id": item["producto_id"],
+            "cantidad": item["cantidad"]
+        } for item in detalle.data]
+        motivo = f"Anulación venta #{venta.data[0]['numero_venta']}"
+        supabase.rpc("revertir_stock_venta", {"p_items": items_json, "p_motivo": motivo}).execute()
 
     supabase.table("ventas")\
         .update({"estado": "anulada"})\
@@ -155,6 +163,8 @@ def anular_venta(venta_id: int):
         .execute()
 
     return {"success": True, "mensaje": "Venta anulada y stock revertido"}
+
+
 @router.get("/{venta_id}/pdf")
 def descargar_pdf_venta(venta_id: int):
     from fpdf import FPDF

@@ -71,15 +71,18 @@ def crear_pedido(pedido: PedidoCreate):
 
     pedido_id = nuevo.data[0]["id"]
 
-    for item in pedido.items:
-        supabase.table("detalle_pedidos").insert({
-            "pedido_id": pedido_id,
-            "producto_id": item.producto_id,
-            "cantidad": item.cantidad,
-            "precio_venta": item.precio_venta
-        }).execute()
+    # Insertar TODOS los items en una sola llamada (batch)
+    detalle_rows = [{
+        "pedido_id": pedido_id,
+        "producto_id": item.producto_id,
+        "cantidad": item.cantidad,
+        "precio_venta": item.precio_venta
+    } for item in pedido.items]
+    if detalle_rows:
+        supabase.table("detalle_pedidos").insert(detalle_rows).execute()
 
     return {"success": True, "numero": numero, "pedido_id": pedido_id}
+
 
 @router.get("/{pedido_id}/pdf")
 def descargar_pdf_pedido(pedido_id: int):
@@ -145,6 +148,7 @@ def descargar_pdf_pedido(pedido_id: int):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=pedido_{p['numero']}.pdf"}
     )
+
 
 @router.get("/{pedido_id}/nota-venta")
 def nota_venta_pdf(pedido_id: int):
@@ -278,6 +282,8 @@ def nota_venta_pdf(pedido_id: int):
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=nota_venta_{v['numero_venta']}.pdf"}
     )
+
+
 # ── Rutas CON parámetros dinámicos DESPUÉS ──────────────────────────
 
 @router.get("/{pedido_id}")
@@ -327,9 +333,10 @@ def entregar_pedido(pedido_id: int, data: dict):
         "notas": f"Pedido {pedido.data[0]['numero']}",
         "estado": "completada"
     }).execute()
+
     venta_id = nueva_venta.data[0]["id"]
 
-    # 1 sola llamada: inserta TODO el detalle de venta de una vez
+    # Insertar TODO el detalle de venta en una sola llamada (batch)
     detalle_rows = [{
         "venta_id": venta_id,
         "producto_id": item["producto_id"],
@@ -338,11 +345,13 @@ def entregar_pedido(pedido_id: int, data: dict):
         "precio_compra": item.get("precio_compra", 0),
         "subtotal": item["subtotal"]
     } for item in items]
-    supabase.table("detalle_ventas").insert(detalle_rows).execute()
+    if detalle_rows:
+        supabase.table("detalle_ventas").insert(detalle_rows).execute()
 
-    # 1 sola llamada: descuenta stock + registra movimientos (reutiliza procesar_venta)
+    # Descontar stock + registrar movimientos en 1 sola llamada RPC
     items_json = [{"producto_id": item["producto_id"], "cantidad": item["cantidad"]} for item in items]
-    supabase.rpc("procesar_venta", {"p_items": items_json}).execute()
+    if items_json:
+        supabase.rpc("procesar_venta", {"p_items": items_json}).execute()
 
     supabase.table("pedidos").update({
         "estado": "entregado",
@@ -350,6 +359,8 @@ def entregar_pedido(pedido_id: int, data: dict):
     }).eq("id", pedido_id).execute()
 
     return {"success": True, "numero_venta": numero_venta, "total": total, "venta_id": venta_id}
+
+
 @router.put("/{pedido_id}/editar")
 def editar_pedido(pedido_id: int, data: dict):
     """
@@ -374,12 +385,15 @@ def editar_pedido(pedido_id: int, data: dict):
     # Borrar items anteriores y reemplazar con los nuevos
     supabase.table("detalle_pedidos").delete().eq("pedido_id", pedido_id).execute()
 
-    for item in data.get("items", []):
-        supabase.table("detalle_pedidos").insert({
+    items = data.get("items", [])
+    if items:
+        # Insertar TODOS los items nuevos en una sola llamada (batch)
+        detalle_rows = [{
             "pedido_id": pedido_id,
             "producto_id": item["producto_id"],
             "cantidad": item["cantidad"],
             "precio_venta": item["precio_venta"]
-        }).execute()
+        } for item in items]
+        supabase.table("detalle_pedidos").insert(detalle_rows).execute()
 
     return {"success": True, "mensaje": "Pedido actualizado"}

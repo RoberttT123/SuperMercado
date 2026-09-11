@@ -1,4 +1,4 @@
-<template>
+  <template>
   <div class="p-6 max-w-full">
     <div class="mb-6 border-b border-[#FFE0CC] pb-4">
       <h1 class="text-3xl font-black text-[#FF6B2B] mb-1">📋 Pedidos</h1>

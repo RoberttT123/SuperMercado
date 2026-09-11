@@ -69,21 +69,27 @@ def get_resumen():
 
 @router.get("/ventas-semana")
 def get_ventas_semana():
+    hoy = date.today()
+    hace_6_dias = hoy - timedelta(days=6)
+    ini = f"{hace_6_dias}T00:00:00"
+    fin = f"{hoy}T23:59:59"
+
+    ventas = supabase.table("ventas").select("total, fecha")\
+        .gte("fecha", ini).lte("fecha", fin)\
+        .eq("estado", "completada").execute()
+
+    # Agrupar en Python (rápido, ya no toca disco)
     resultado = []
     for i in range(6, -1, -1):
-        d = date.today() - timedelta(days=i)
-        ini = f"{d}T00:00:00"
-        fin = f"{d}T23:59:59"
-        ventas = supabase.table("ventas").select("total")\
-            .gte("fecha", ini).lte("fecha", fin)\
-            .eq("estado", "completada").execute()
+        d = hoy - timedelta(days=i)
+        d_str = d.isoformat()
+        ventas_dia = [v for v in ventas.data if v["fecha"][:10] == d_str]
         resultado.append({
             "dia": d.strftime("%a %d"),
-            "total": sum(v["total"] for v in ventas.data),
-            "cantidad": len(ventas.data)
+            "total": sum(v["total"] for v in ventas_dia),
+            "cantidad": len(ventas_dia)
         })
     return resultado
-
 
 @router.get("/top-productos")
 def get_top_productos():

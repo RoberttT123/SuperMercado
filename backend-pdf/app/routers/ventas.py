@@ -16,6 +16,8 @@ class ItemVenta(BaseModel):
     precio_unitario: float
     precio_compra: float
     subtotal: float
+    presentacion_nombre: Optional[str] = None
+    presentacion_cantidad: Optional[float] = None
 
 
 class VentaCreate(BaseModel):
@@ -66,18 +68,21 @@ def crear_venta(venta: VentaCreate):
 
     venta_id = nueva_venta.data[0]["id"]
 
-    # 2. Insertar TODO el detalle en una sola llamada (batch)
+    # 2. Insertar TODO el detalle en una sola llamada (batch), incluyendo presentación
     detalle_rows = [{
         "venta_id": venta_id,
         "producto_id": item.producto_id,
         "cantidad": item.cantidad,
         "precio_unitario": item.precio_unitario,
         "precio_compra": item.precio_compra,
-        "subtotal": item.subtotal
+        "subtotal": item.subtotal,
+        "presentacion_nombre": item.presentacion_nombre,
+        "presentacion_cantidad": item.presentacion_cantidad
     } for item in venta.items]
     supabase.table("detalle_ventas").insert(detalle_rows).execute()
 
     # 3. Descontar stock + registrar movimientos de TODOS los productos en 1 sola llamada
+    #    (siempre en unidades base, sin importar qué presentación se vendió)
     items_json = [{
         "producto_id": item.producto_id,
         "cantidad": item.cantidad
@@ -126,7 +131,9 @@ def get_detalle_venta(venta_id: int):
             "nombre": prod.get("nombre", "Desconocido"),
             "cantidad": d["cantidad"],
             "precio": d["precio_unitario"],
-            "subtotal": d["subtotal"]
+            "subtotal": d["subtotal"],
+            "presentacion_nombre": d.get("presentacion_nombre"),
+            "presentacion_cantidad": d.get("presentacion_cantidad")
         })
     return items
 
@@ -228,8 +235,11 @@ def descargar_pdf_venta(venta_id: int):
     fill = False
     for d in detalles.data:
         nombre = (d.get("productos") or {}).get("nombre", "—")
+        # Si se vendió por presentación (ej: 3 Jabas), mostrarlo junto al nombre
+        if d.get("presentacion_nombre"):
+            nombre = f"{nombre} ({d['presentacion_cantidad']:g} {d['presentacion_nombre']})"
         pdf.set_fill_color(252, 248, 244) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(col_prod,  6, nombre[:28],                              fill=True)
+        pdf.cell(col_prod,  6, nombre[:32],                              fill=True)
         pdf.cell(col_cant,  6, str(d["cantidad"]),                       fill=True, align="C")
         pdf.cell(col_precio,6, f"Bs. {float(d['precio_unitario']):.2f}", fill=True, align="R")
         pdf.cell(col_sub,   6, f"Bs. {float(d['subtotal']):.2f}",        fill=True, align="R", ln=True)

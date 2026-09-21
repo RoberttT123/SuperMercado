@@ -32,29 +32,19 @@
             </label>
           </div>
 
-          <!-- Input Código -->
+          <!-- Input Código (scanner: Enter = agrega directo si hay 1 match exacto) -->
           <div v-if="metodoBusqueda === 'codigo'" class="flex gap-3">
-            <input type="text" v-model="codigoInput" @keyup.enter="simularBusqueda"
+            <input type="text" v-model="codigoInput" @keyup.enter="escanearCodigo"
               placeholder="Escanea o escribe el código..."
               class="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]" autofocus />
             <input type="number" v-model.number="cantidadScan" min="1"
               class="w-24 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]" />
-            <button @click="simularBusqueda"
-              class="bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-2 px-6 rounded-lg transition-colors">
-              ➕ Agregar
-            </button>
           </div>
 
-          <!-- Input Nombre -->
-          <div v-if="metodoBusqueda === 'nombre'" class="flex gap-3">
-            <input type="text" v-model="nombreBusq" placeholder="Ej: leche..."
-              class="flex-1 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]" />
-            <input type="number" v-model.number="cantidadNom" min="1"
-              class="w-24 px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]" />
-            <button @click="simularBusqueda"
-              class="bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-2 px-6 rounded-lg transition-colors">
-              ➕ Agregar
-            </button>
+          <!-- Input Nombre (búsqueda en vivo, sin botón) -->
+          <div v-if="metodoBusqueda === 'nombre'">
+            <input type="text" v-model="nombreBusq" placeholder="Escribe el nombre... aparece solo"
+              class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]" autofocus />
           </div>
 
           <!-- Error búsqueda -->
@@ -62,21 +52,18 @@
             {{ errorBusqueda }}
           </div>
 
-          <!-- Resultados búsqueda por nombre -->
+          <div v-if="buscando" class="mt-2 text-center text-sm text-gray-500">🔍 Buscando...</div>
+
+          <!-- Resultados: chips de un solo toque -->
           <div v-if="resultadosBusqueda.length > 0"
             class="mt-2 border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             <div v-for="prod in resultadosBusqueda" :key="prod.id"
               class="p-3 border-b border-gray-100 last:border-0 hover:bg-orange-50/50 transition-colors">
 
-              <!-- Info del producto -->
               <div class="flex justify-between items-start mb-2">
                 <div>
                   <span class="font-bold text-sm">{{ prod.nombre }}</span>
                   <span class="text-xs text-gray-400 ml-2">{{ prod.codigo }}</span>
-                  <span v-if="esCajaOPaqueteProducto(prod)"
-                    class="ml-2 text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">
-                    📦 {{ prod.unidades_por_caja }} u/{{ prod.unidad }}
-                  </span>
                 </div>
                 <div class="text-right">
                   <div class="font-black text-[#FF6B2B]">Bs. {{ prod.precio_venta.toFixed(2) }}/ud</div>
@@ -86,59 +73,23 @@
                 </div>
               </div>
 
-              <!-- ✅ PRODUCTO TIPO CAJA/PAQUETE -->
-              <div v-if="esCajaOPaqueteProducto(prod)" class="bg-blue-50 rounded-xl p-3 space-y-2">
-                <div class="text-xs font-black text-blue-700 uppercase">
-                  Precio {{ prod.unidad }}: Bs. {{ ((prod.precio_venta || 0) * (prod.unidades_por_caja || 1)).toFixed(2) }}
-                </div>
-                <div class="grid grid-cols-3 gap-2 items-end">
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">
-                      N° de {{ prod.unidad === 'caja' ? 'cajas' : 'paquetes' }}
-                    </label>
-                    <input type="number" min="0"
-                      v-model.number="cajasTemp[prod.id]"
-                      class="w-full px-2 py-2 border-2 border-blue-300 rounded-lg text-center font-black text-lg focus:outline-none focus:border-blue-500 bg-white">
-                  </div>
-                  <div>
-                    <label class="block text-xs font-bold text-gray-600 mb-1">Sueltas</label>
-                    <input type="number" min="0"
-                      v-model.number="sueltasTemp[prod.id]"
-                      class="w-full px-2 py-2 border border-blue-200 rounded-lg text-center font-bold focus:outline-none focus:border-blue-400 bg-white">
-                  </div>
-                  <div class="text-center">
-                    <div class="text-xs text-gray-400 mb-1">Total uds.</div>
-                    <div class="font-black text-blue-700 text-lg">{{ calcularUnidadesPOS(prod) }}</div>
-                  </div>
-                </div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <input type="number" min="1" v-model.number="cantidadChip[prod.id]"
+                  class="w-14 px-1 py-1.5 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
 
-                <!-- Subtotal preview -->
-                <div v-if="calcularUnidadesPOS(prod) > 0"
-                  class="bg-blue-700 text-white rounded-lg p-2 flex justify-between items-center text-sm">
-                  <span>{{ calcularUnidadesPOS(prod) }} uds × Bs. {{ prod.precio_venta.toFixed(2) }}</span>
-                  <span class="font-black">= Bs. {{ (calcularUnidadesPOS(prod) * prod.precio_venta).toFixed(2) }}</span>
-                </div>
-
-                <button @click="agregarAlCarrito(prod)"
-                  :disabled="calcularUnidadesPOS(prod) <= 0"
-                  class="w-full bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-2 rounded-lg transition-colors disabled:opacity-40 text-sm">
-                  ➕ Agregar {{ calcularUnidadesPOS(prod) > 0 ? calcularUnidadesPOS(prod) + ' unidades' : '' }}
+                <button @click="agregarAlCarrito(prod, null, cantidadChip[prod.id] || 1)"
+                  class="bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold text-xs py-1.5 px-3 rounded-lg transition-colors">
+                  ➕ Unidad
                 </button>
-              </div>
 
-              <!-- ✅ PRODUCTO SIMPLE -->
-              <div v-else class="flex items-center gap-3">
-                <input type="number" min="1" v-model.number="cantidadNom"
-                  class="w-20 px-2 py-1.5 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
-                <button @click="agregarAlCarrito(prod, cantidadNom)"
-                  class="flex-1 bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-1.5 px-4 rounded-lg transition-colors text-sm">
-                  ➕ Agregar
+                <button v-for="(pres, i) in (prod.presentaciones || [])" :key="i"
+                  @click="agregarAlCarrito(prod, pres, cantidadChip[prod.id] || 1)"
+                  class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-1.5 px-3 rounded-lg transition-colors">
+                  📦 {{ pres.nombre }} · Bs. {{ pres.precio_venta.toFixed(2) }}
                 </button>
               </div>
             </div>
           </div>
-
-          <div v-if="buscando" class="mt-2 text-center text-sm text-gray-500">🔍 Buscando...</div>
         </div>
 
         <!-- Carrito -->
@@ -147,7 +98,7 @@
 
           <div v-if="carrito.length === 0"
             class="bg-orange-50 text-[#E85510] p-4 rounded-lg text-center border border-orange-100">
-            El carrito está vacío. Escanea un producto para comenzar.
+            El carrito está vacío. Escanea o busca un producto para comenzar.
           </div>
 
           <div v-else class="overflow-x-auto">
@@ -156,14 +107,19 @@
                 <tr class="border-b-2 border-[#FFE0CC] text-sm text-gray-500">
                   <th class="pb-2">Producto</th>
                   <th class="pb-2 w-24">Cant.</th>
-                  <th class="pb-2">Precio</th>
+                  <th class="pb-2">Precio/ud</th>
                   <th class="pb-2">Subtotal</th>
                   <th class="pb-2 text-center">—</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100">
                 <tr v-for="(item, index) in carrito" :key="index" class="hover:bg-gray-50">
-                  <td class="py-3 font-medium">{{ item.nombre }}</td>
+                  <td class="py-3 font-medium">
+                    {{ item.nombre }}
+                    <span v-if="item.presentacion_nombre" class="block text-xs text-blue-600 font-normal">
+                      📦 {{ item.presentacion_cantidad }} {{ item.presentacion_nombre }}(s)
+                    </span>
+                  </td>
                   <td class="py-3">
                     <input type="number" v-model.number="item.cantidad"
                       @input="recalcularSubtotal(item)" min="1"
@@ -190,14 +146,12 @@
         <!-- Panel de Cobro -->
         <div class="bg-white rounded-2xl p-6 shadow-sm border border-[#FFE0CC] flex flex-col gap-4">
 
-          <!-- Descuento -->
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-1">🏷️ Descuento (Bs.)</label>
             <input type="number" v-model.number="descuento" min="0" :max="subtotal" step="0.5"
               class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]" />
           </div>
 
-          <!-- Total -->
           <div class="bg-[#FFF9F6] border-2 border-[#FF6B2B] rounded-xl p-4 text-center mt-2">
             <div class="text-sm font-black text-[#E85510] uppercase tracking-widest mb-1">Total a Pagar</div>
             <div class="text-4xl font-black text-[#2A1A0A]">Bs. {{ total.toFixed(2) }}</div>
@@ -205,7 +159,6 @@
 
           <hr class="border-gray-200" />
 
-          <!-- Método de pago -->
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-2">💳 Método de pago:</label>
             <div class="grid grid-cols-3 gap-2">
@@ -227,7 +180,6 @@
             </div>
           </div>
 
-          <!-- Monto recibido -->
           <div v-if="metodoPago === 'efectivo'" class="bg-gray-50 p-4 rounded-xl border border-gray-200">
             <label class="block text-sm font-bold text-gray-700 mb-1">💵 Monto recibido (Bs.)</label>
             <input type="number" v-model.number="montoRecibido" min="0"
@@ -240,14 +192,12 @@
             </div>
           </div>
 
-          <!-- Notas -->
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-1">📝 Notas (opcional)</label>
             <input type="text" v-model="notasVenta" placeholder="Detalles de la venta..."
               class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]" />
           </div>
 
-          <!-- Botones -->
           <div class="grid grid-cols-2 gap-3 mt-4">
             <button @click="procesarVenta" :disabled="!puedeCobrar"
               :class="['py-3 rounded-xl font-black text-lg transition-all',
@@ -260,7 +210,6 @@
             </button>
           </div>
 
-          <!-- Mensaje Éxito -->
           <div v-if="ventaOk" class="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl text-center">
             <div class="text-green-600 text-3xl mb-2">✅</div>
             <h3 class="font-black text-green-800">¡Venta completada!</h3>
@@ -310,7 +259,7 @@ import posService from '@/services/posService'
 const authStore = useAuthStore()
 const cajaStore = useCajaStore()
 
-// --- ESTADO ---
+// --- ESTADO GENERAL ---
 const cajeroActual = ref(authStore.user?.username || 'Cajero')
 const ventasHoyCount = ref(0)
 const totalHoyMonto = ref(0)
@@ -319,10 +268,10 @@ const metodoBusqueda = ref('codigo')
 const codigoInput = ref('')
 const cantidadScan = ref(1)
 const nombreBusq = ref('')
-const cantidadNom = ref(1)
 const resultadosBusqueda = ref([])
 const buscando = ref(false)
 const errorBusqueda = ref('')
+const cantidadChip = ref({}) // cantidad temporal por producto en la lista de resultados
 
 const carrito = ref([])
 const descuento = ref(0)
@@ -331,19 +280,7 @@ const montoRecibido = ref(0)
 const notasVenta = ref('')
 const ventaOk = ref(null)
 const procesando = ref(false)
-// ✅ Para manejo de cajas en POS
-const cajasTemp = ref({})        // cajas por producto
-const sueltasTemp = ref({})      // unidades sueltas por producto
 
-const esCajaOPaqueteProducto = (prod) =>
-  prod.unidad === 'caja' || prod.unidad === 'paquete'
-
-const calcularUnidadesPOS = (prod) => {
-  const cajas = cajasTemp.value[prod.id] || 0
-  const sueltas = sueltasTemp.value[prod.id] || 0
-  const uds = prod.unidades_por_caja || 1
-  return (cajas * uds) + sueltas
-}
 // --- COMPUTADOS ---
 const subtotal = computed(() =>
   carrito.value.reduce((acc, item) => acc + item.subtotal, 0)
@@ -384,33 +321,20 @@ const cargarResumenHoy = async () => {
   }
 }
 
-// --- BÚSQUEDA ---
-const simularBusqueda = async () => {
-  const term = metodoBusqueda.value === 'codigo' ? codigoInput.value : nombreBusq.value
-  if (!term) return
+// --- BÚSQUEDA EN VIVO (sin botón, sin Enter) ---
+let debounceTimer = null
 
+const ejecutarBusqueda = async (fn, term) => {
   buscando.value = true
   errorBusqueda.value = ''
-  resultadosBusqueda.value = []
-
   try {
-    let resultados = []
-    if (metodoBusqueda.value === 'codigo') {
-      resultados = await posService.buscarPorCodigo(term)
-      if (resultados.length === 1) {
-        agregarAlCarrito(resultados[0], cantidadScan.value)
-        codigoInput.value = ''
-        cantidadScan.value = 1
-        return
-      }
-    } else {
-      resultados = await posService.buscarPorNombre(term)
-    }
-
+    const resultados = await fn(term)
+    resultadosBusqueda.value = resultados
+    resultados.forEach(p => {
+      if (!(p.id in cantidadChip.value)) cantidadChip.value[p.id] = 1
+    })
     if (resultados.length === 0) {
       errorBusqueda.value = `No se encontró ningún producto con "${term}"`
-    } else {
-      resultadosBusqueda.value = resultados
     }
   } catch (e) {
     errorBusqueda.value = 'Error al buscar producto'
@@ -419,30 +343,83 @@ const simularBusqueda = async () => {
     buscando.value = false
   }
 }
-const agregarAlCarrito = (producto, cantidad = 1) => {
-  // ✅ Para vendedores en pedidos no verificamos stock
-  // En POS sí verificamos
+
+watch(nombreBusq, (val) => {
+  clearTimeout(debounceTimer)
+  if (!val || val.trim().length < 2) {
+    resultadosBusqueda.value = []
+    errorBusqueda.value = ''
+    return
+  }
+  debounceTimer = setTimeout(() => {
+    ejecutarBusqueda(posService.buscarPorNombre, val.trim())
+  }, 300)
+})
+
+// --- ESCANEO POR CÓDIGO (scanner: Enter → agrega directo si hay match exacto) ---
+const escanearCodigo = async () => {
+  const term = codigoInput.value.trim()
+  if (!term) return
+
+  buscando.value = true
+  errorBusqueda.value = ''
+  try {
+    const resultados = await posService.buscarPorCodigo(term)
+    if (resultados.length === 1) {
+      agregarAlCarrito(resultados[0], null, cantidadScan.value)
+      codigoInput.value = ''
+      cantidadScan.value = 1
+      resultadosBusqueda.value = []
+    } else if (resultados.length === 0) {
+      errorBusqueda.value = `No se encontró ningún producto con código "${term}"`
+    } else {
+      resultadosBusqueda.value = resultados
+      resultados.forEach(p => {
+        if (!(p.id in cantidadChip.value)) cantidadChip.value[p.id] = 1
+      })
+    }
+  } catch (e) {
+    errorBusqueda.value = 'Error al buscar producto'
+    console.error(e)
+  } finally {
+    buscando.value = false
+  }
+}
+
+// --- AGREGAR AL CARRITO ---
+// presentacion: null = unidad suelta, o el objeto { nombre, unidades_base, precio_venta }
+const agregarAlCarrito = (producto, presentacion = null, cantidadPresentacion = 1) => {
   if (producto.stock <= 0) {
     alert(`⚠️ "${producto.nombre}" no tiene stock disponible`)
     return
   }
 
-  // Si es caja/paquete calcular desde cajas + sueltas
-  let cantidadFinal = cantidad
-  if (esCajaOPaqueteProducto(producto)) {
-    cantidadFinal = calcularUnidadesPOS(producto)
-    if (cantidadFinal <= 0) {
-      alert('⚠️ Ingresa al menos 1 caja o unidad suelta')
-      return
-    }
+  let cantidadFinal, precioUnitario, presentacionNombre, presentacionCantidad
+  if (presentacion) {
+    cantidadFinal = presentacion.unidades_base * cantidadPresentacion
+    precioUnitario = presentacion.unidades_base > 0
+      ? presentacion.precio_venta / presentacion.unidades_base
+      : producto.precio_venta
+    presentacionNombre = presentacion.nombre
+    presentacionCantidad = cantidadPresentacion
+  } else {
+    cantidadFinal = cantidadPresentacion
+    precioUnitario = producto.precio_venta
+    presentacionNombre = null
+    presentacionCantidad = null
   }
+
+  if (cantidadFinal <= 0) return
 
   if (cantidadFinal > producto.stock) {
     alert(`⚠️ Stock insuficiente. Disponible: ${producto.stock} unidades`)
     return
   }
 
-  const index = carrito.value.findIndex(i => i.producto_id === producto.id)
+  // Fusiona si ya existe el mismo producto CON la misma presentación en el carrito
+  const index = carrito.value.findIndex(
+    i => i.producto_id === producto.id && i.presentacion_nombre === presentacionNombre
+  )
   if (index !== -1) {
     const nuevaCantidad = carrito.value[index].cantidad + cantidadFinal
     if (nuevaCantidad > producto.stock) {
@@ -450,26 +427,28 @@ const agregarAlCarrito = (producto, cantidad = 1) => {
       return
     }
     carrito.value[index].cantidad = nuevaCantidad
+    if (presentacionNombre) {
+      carrito.value[index].presentacion_cantidad = (carrito.value[index].presentacion_cantidad || 0) + presentacionCantidad
+    }
     recalcularSubtotal(carrito.value[index])
   } else {
     carrito.value.push({
       producto_id: producto.id,
       codigo: producto.codigo,
       nombre: producto.nombre,
-      precio_unitario: producto.precio_venta,
+      precio_unitario: precioUnitario,
       precio_compra: producto.precio_compra,
       stock_disponible: producto.stock,
       cantidad: cantidadFinal,
-      subtotal: producto.precio_venta * cantidadFinal
+      subtotal: precioUnitario * cantidadFinal,
+      presentacion_nombre: presentacionNombre,
+      presentacion_cantidad: presentacionCantidad
     })
   }
 
-  // Limpiar
-  cajasTemp.value[producto.id] = 0
-  sueltasTemp.value[producto.id] = 0
-  resultadosBusqueda.value = []
+  // Limpiar para seguir buscando rápido
   nombreBusq.value = ''
-  cantidadNom.value = 1
+  resultadosBusqueda.value = []
 }
 
 const recalcularSubtotal = (item) => {
@@ -503,13 +482,15 @@ const procesarVenta = async () => {
         cantidad: item.cantidad,
         precio_unitario: item.precio_unitario,
         precio_compra: item.precio_compra,
-        subtotal: item.subtotal
+        subtotal: item.subtotal,
+        presentacion_nombre: item.presentacion_nombre || null,
+        presentacion_cantidad: item.presentacion_cantidad || null
       })),
       metodo_pago: metodoPago.value,
       monto_recibido: montoRecibido.value,
       descuento: descuento.value,
       notas: notasVenta.value || null,
-      caja_id: cajaStore.cajaId  // ✅ CRÍTICO
+      caja_id: cajaStore.cajaId
     }
 
     const resultado = await posService.procesarVenta(payload)
@@ -520,9 +501,7 @@ const procesarVenta = async () => {
       cambio: resultado.cambio || 0
     }
 
-    // ✅ Actualizar store de caja para que sidebar y cajaview se actualicen
     cajaStore.actualizarVentasHoy(resultado.total)
-
     ventasHoyCount.value++
     totalHoyMonto.value += resultado.total
 

@@ -1,11 +1,22 @@
 from fastapi import APIRouter, HTTPException
 from app.supabase_client import supabase
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import uuid
 
 router = APIRouter(prefix="/inventario", tags=["Inventario"])
+
+
+# --- ESQUEMAS ---
+
+class PresentacionInput(BaseModel):
+    nombre: str
+    unidades_base: int
+    precio_venta: float
+    precio_compra: float = 0
+    orden: int = 0
+
 
 class ProductoCreate(BaseModel):
     codigo: str
@@ -17,7 +28,8 @@ class ProductoCreate(BaseModel):
     stock: int = 0
     stock_minimo: int = 5
     unidad: str = "unidad"
-    unidades_por_caja: int = 1
+    presentaciones: List[PresentacionInput] = []
+
 
 class ProductoUpdate(BaseModel):
     nombre: Optional[str] = None
@@ -26,8 +38,9 @@ class ProductoUpdate(BaseModel):
     precio_venta: Optional[float] = None
     stock: Optional[int] = None
     stock_minimo: Optional[int] = None
-    unidades_por_caja: Optional[int] = None
-    unidad: Optional[str] = None  # ✅ CAMPO AGREGADO PARA PERMITIR LA ACTUALIZACIÓN
+    unidad: Optional[str] = None
+    activo: Optional[bool] = None
+    presentaciones: Optional[List[PresentacionInput]] = None
 
 
 # ── Rutas SIN parámetros dinámicos primero ──────────────────────
@@ -38,13 +51,30 @@ def get_productos():
         .select("*, categorias(nombre)")\
         .eq("activo", True)\
         .execute()
-    
-    productos = []
+
+    productos, ids = [], []
     for fila_producto in result.data:
         prod = {**fila_producto}
         prod["categoria"] = fila_producto.get("categorias", {}).get("nombre") if fila_producto.get("categorias") else None
-        del prod["categorias"]
+        prod.pop("categorias", None)
         productos.append(prod)
+        ids.append(fila_producto["id"])
+
+    # 1 sola query extra: TODAS las presentaciones de TODOS los productos
+    presentaciones_map = {}
+    if ids:
+        pres = supabase.table("producto_presentaciones")\
+            .select("*")\
+            .in_("producto_id", ids)\
+            .eq("activo", True)\
+            .order("orden")\
+            .execute().data
+        for pr in pres:
+            presentaciones_map.setdefault(pr["producto_id"], []).append(pr)
+
+    for prod in productos:
+        prod["presentaciones"] = presentaciones_map.get(prod["id"], [])
+
     return productos
 
 
@@ -72,27 +102,79 @@ def buscar_producto(codigo: Optional[str] = None, nombre: Optional[str] = None):
             .execute()
     else:
         raise HTTPException(status_code=400, detail="Debes enviar codigo o nombre")
-    return result.data
+
+    productos = result.data
+    ids = [p["id"] for p in productos]
+
+    # También traemos presentaciones aquí — el POS las necesita para mostrar precios por mayor
+    presentaciones_map = {}
+    if ids:
+        pres = supabase.table("producto_presentaciones")\
+            .select("*")\
+            .in_("producto_id", ids)\
+            .eq("activo", True)\
+            .order("orden")\
+            .execute().data
+        for pr in pres:
+            presentaciones_map.setdefault(pr["producto_id"], []).append(pr)
+
+    for prod in productos:
+        prod["presentaciones"] = presentaciones_map.get(prod["id"], [])
+
+    return productos
 
 
 # ── Rutas CON parámetros dinámicos después ──────────────────────
 
 @router.post("/productos")
 def create_producto(producto: ProductoCreate):
-    result = supabase.table("productos").insert(producto.dict()).execute()
+    data = producto.model_dump(exclude={"presentaciones"})
+    result = supabase.table("productos").insert(data).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Error al crear producto")
-    return result.data[0]
+
+    nuevo = result.data[0]
+
+    if producto.presentaciones:
+        rows = [{
+            "producto_id": nuevo["id"],
+            "nombre": p.nombre,
+            "unidades_base": p.unidades_base,
+            "precio_venta": p.precio_venta,
+            "precio_compra": p.precio_compra,
+            "orden": p.orden
+        } for p in producto.presentaciones]
+        supabase.table("producto_presentaciones").insert(rows).execute()
+        nuevo["presentaciones"] = rows
+    else:
+        nuevo["presentaciones"] = []
+
+    return nuevo
 
 
 @router.put("/productos/{producto_id}")
 def update_producto(producto_id: int, producto: ProductoUpdate):
-    data = {k: v for k, v in producto.dict().items() if v is not None}
+    data = producto.model_dump(exclude={"presentaciones"}, exclude_unset=True)
     data["updated_at"] = datetime.utcnow().isoformat()
-    
+
     result = supabase.table("productos").update(data).eq("id", producto_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+    # Si vino la lista de presentaciones, se reemplaza completa (simple y sin ambigüedad)
+    if producto.presentaciones is not None:
+        supabase.table("producto_presentaciones").delete().eq("producto_id", producto_id).execute()
+        if producto.presentaciones:
+            rows = [{
+                "producto_id": producto_id,
+                "nombre": p.nombre,
+                "unidades_base": p.unidades_base,
+                "precio_venta": p.precio_venta,
+                "precio_compra": p.precio_compra,
+                "orden": p.orden
+            } for p in producto.presentaciones]
+            supabase.table("producto_presentaciones").insert(rows).execute()
+
     return result.data[0]
 
 
@@ -143,6 +225,13 @@ def get_movimientos(producto_id: int):
 
 @router.post("/compras")
 def registrar_compra(data: dict):
+    """
+    data: {
+        "proveedor_id": int | None,
+        "notas": str,
+        "items": [{ "productoId": int, "cantidad": int, "precio_unitario": float, "subtotal": float }]
+    }
+    """
     numero = f"C-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
     total = sum(item["subtotal"] for item in data["items"])
 
@@ -155,6 +244,7 @@ def registrar_compra(data: dict):
     }).execute()
     compra_id = compra.data[0]["id"]
 
+    # 1 sola llamada: inserta TODO el detalle de una vez
     detalle_rows = [{
         "compra_id": compra_id,
         "producto_id": item["productoId"],
@@ -164,6 +254,7 @@ def registrar_compra(data: dict):
     } for item in data["items"]]
     supabase.table("detalle_compras").insert(detalle_rows).execute()
 
+    # 1 sola llamada: suma stock + registra movimientos de TODOS los productos
     items_json = [{"producto_id": item["productoId"], "cantidad": item["cantidad"]} for item in data["items"]]
     supabase.rpc("procesar_compra", {"p_items": items_json}).execute()
 

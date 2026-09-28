@@ -16,6 +16,13 @@ app.add_middleware(
 )
 
 
+# Endpoint liviano para el ping de mantenimiento (UptimeRobot / cron-job.org),
+# NO toca Supabase para nada — solo mantiene despierto el contenedor de Render.
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     origin = request.headers.get("origin")

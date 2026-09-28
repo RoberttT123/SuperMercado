@@ -36,7 +36,7 @@
             class="absolute top-3 right-3 w-8 h-8 bg-white/20 text-white rounded-lg flex items-center justify-center hover:bg-white/30 transition-colors font-black"
           >✕</button>
 
-          <img src="/src/assets/logo.png" alt="Logo"
+          <img src="/logo.png" alt="Logo"
             class="w-20 h-20 object-cover rounded-full mx-auto block mb-3 bg-white border-4 border-white/30"
             @error="handleImageError" v-if="hasLogo"
           />
@@ -132,7 +132,7 @@
           </button>
         </div>
 
-        <img src="/src/assets/logo.png" alt="Logo"
+        <img src="/logo.png" alt="Logo"
           class="w-[180px] h-[180px] object-cover rounded-full mx-auto block mb-2 bg-white"
           @error="handleImageError" v-if="hasLogo"
         />

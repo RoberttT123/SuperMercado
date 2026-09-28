@@ -3,7 +3,7 @@
     <div class="mb-6 flex justify-between items-end border-b border-[#FFE0CC] pb-4">
       <div>
         <h1 class="text-3xl font-black text-[#FF6B2B] mb-1">📊 Reportes y Analítica</h1>
-        <p class="text-gray-500 text-sm">Analítica de ventas, ganancias y productos más vendidos.</p>
+        <p class="text-gray-500 text-sm">Analítica de ventas, compras, ganancias y productos más vendidos.</p>
       </div>
     </div>
 
@@ -34,14 +34,23 @@
           <input type="date" v-model="fechaHasta" class="px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B]">
         </div>
       </div>
-      
-      <button 
-        @click="cargarDatosReportes"
-        :disabled="cargando"
-        class="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 font-bold py-2 px-6 rounded-lg transition-colors ml-auto"
-      >
-        {{ cargando ? '🔄 Cargando...' : '🔄 Actualizar' }}
-      </button>
+
+      <div class="ml-auto flex gap-3">
+        <button 
+          @click="exportarExcel"
+          :disabled="exportando"
+          class="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold py-2 px-6 rounded-lg transition-colors flex items-center gap-2"
+        >
+          {{ exportando ? '⏳ Generando...' : '📊 Exportar Excel' }}
+        </button>
+        <button 
+          @click="cargarDatosReportes"
+          :disabled="cargando"
+          class="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 font-bold py-2 px-6 rounded-lg transition-colors"
+        >
+          {{ cargando ? '🔄 Cargando...' : '🔄 Actualizar' }}
+        </button>
+      </div>
     </div>
 
     <div v-if="cargando && ventas.length === 0" class="text-center py-12 text-gray-500 font-medium">
@@ -94,15 +103,18 @@
         </div>
       </div>
 
-      <div class="mb-4 flex border-b border-gray-200">
-        <button @click="activeTab = 'ventas'" :class="['py-3 px-6 font-bold text-sm transition-colors', activeTab === 'ventas' ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]' : 'text-gray-500 hover:text-gray-700']">
+      <div class="mb-4 flex border-b border-gray-200 overflow-x-auto">
+        <button @click="activeTab = 'ventas'" :class="['whitespace-nowrap py-3 px-6 font-bold text-sm transition-colors', activeTab === 'ventas' ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]' : 'text-gray-500 hover:text-gray-700']">
           📋 Historial de Ventas
         </button>
-        <button @click="activeTab = 'top'" :class="['py-3 px-6 font-bold text-sm transition-colors', activeTab === 'top' ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]' : 'text-gray-500 hover:text-gray-700']">
+        <button @click="activeTab = 'top'" :class="['whitespace-nowrap py-3 px-6 font-bold text-sm transition-colors', activeTab === 'top' ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]' : 'text-gray-500 hover:text-gray-700']">
           🏆 Top Productos
         </button>
-        <button @click="activeTab = 'stock'" :class="['py-3 px-6 font-bold text-sm transition-colors', activeTab === 'stock' ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]' : 'text-gray-500 hover:text-gray-700']">
+        <button @click="activeTab = 'stock'" :class="['whitespace-nowrap py-3 px-6 font-bold text-sm transition-colors', activeTab === 'stock' ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]' : 'text-gray-500 hover:text-gray-700']">
           ⚠️ Stock Crítico
+        </button>
+        <button @click="activeTab = 'compras'" :class="['whitespace-nowrap py-3 px-6 font-bold text-sm transition-colors', activeTab === 'compras' ? 'text-[#FF6B2B] border-b-2 border-[#FF6B2B]' : 'text-gray-500 hover:text-gray-700']">
+          🏭 Compras a Proveedores
         </button>
       </div>
 
@@ -116,6 +128,7 @@
                   <tr class="border-b-2 border-gray-100 text-sm text-gray-500">
                     <th class="pb-2">Nº Venta</th>
                     <th class="pb-2">Fecha</th>
+                    <th class="pb-2">Cliente</th>
                     <th class="pb-2">Método</th>
                     <th class="pb-2">Descuento</th>
                     <th class="pb-2">Total</th>
@@ -124,7 +137,7 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100">
                   <tr v-if="ventas.length === 0">
-                    <td colspan="6" class="py-4 text-center text-gray-400 text-sm">No se encontraron ventas en este período.</td>
+                    <td colspan="7" class="py-4 text-center text-gray-400 text-sm">No se encontraron ventas en este período.</td>
                   </tr>
                   <tr 
                     v-for="v in ventas" 
@@ -134,8 +147,11 @@
                     :class="{'bg-orange-50': ventaSeleccionada?.id === v.id}"
                   >
                     <td class="py-3 font-bold text-[#FF6B2B]">{{ v.numero_venta }}</td>
-                    <td class="py-3 text-sm">{{ v.fecha }}</td>
-                    <td class="py-3 text-sm capitalize">{{ v.metodo_pago }}</td>
+                    <td class="py-3 text-sm">{{ v.fecha.slice(0, 10) }}</td>                    <td class="py-3 text-sm">
+                      {{ v.cliente_nombre || 'Consumidor final' }}
+                      <span v-if="v.es_credito" class="ml-1 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">CRÉDITO</span>
+                    </td>
+                    <td class="py-3 text-sm capitalize">{{ v.es_credito ? 'Crédito' : v.metodo_pago }}</td>
                     <td class="py-3 text-sm">Bs. {{ (v.descuento || 0).toFixed(2) }}</td>
                     <td class="py-3 font-bold">Bs. {{ v.total.toFixed(2) }}</td>
                     <td class="py-3 text-sm">
@@ -157,12 +173,22 @@
               
               <div v-else>
                 <div class="text-sm font-bold mb-2">Venta: {{ ventaSeleccionada.numero_venta }}</div>
-                <div class="text-xs text-gray-600 mb-4">Cliente: {{ ventaSeleccionada.cliente || 'Consumidor final' }}</div>
+                <div class="text-xs text-gray-600 mb-2">
+                  Cliente: {{ ventaSeleccionada.cliente_nombre || 'Consumidor final' }}
+                  <span v-if="ventaSeleccionada.es_credito" class="ml-1 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">
+                    A CRÉDITO
+                  </span>
+                </div>
+                <div v-if="ventaSeleccionada.es_credito" class="text-xs bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-4">
+                  Pagó ahora: <strong>Bs. {{ (ventaSeleccionada.monto_recibido || 0).toFixed(2) }}</strong>
+                  · Quedó a crédito: <strong class="text-red-600">Bs. {{ Math.max(0, ventaSeleccionada.total - (ventaSeleccionada.monto_recibido || 0)).toFixed(2) }}</strong>
+                </div>
                 
                 <div class="space-y-2 mb-4 max-h-60 overflow-y-auto">
                   <div v-for="(item, idx) in ventaSeleccionada.items" :key="idx" class="bg-white p-2 border border-gray-200 rounded text-xs flex justify-between">
                     <div>
                       <span class="font-bold">{{ item.cantidad }}x</span> {{ item.nombre }}
+                      <span v-if="item.nivel" class="text-gray-400 capitalize">({{ item.nivel }})</span>
                     </div>
                     <div class="font-bold">Bs. {{ (item.cantidad * item.precio).toFixed(2) }}</div>
                   </div>
@@ -170,8 +196,9 @@
                 
                 <button 
                   @click="descargarFacturaPDF(ventaSeleccionada.id)"
-                  class="w-full bg-[#FF6B2B] hover:bg-[#E85510] text-white font-bold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
-                >📥 Descargar PDF
+                  :disabled="descargandoPdf"
+                  class="w-full bg-[#FF6B2B] hover:bg-[#E85510] disabled:opacity-50 text-white font-bold py-2 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+                >{{ descargandoPdf ? '⏳ Generando...' : '📥 Descargar PDF' }}
                 </button>
               </div>
             </div>
@@ -214,12 +241,12 @@
 
         <div v-if="activeTab === 'stock'">
           <div v-if="stockCritico.length === 0" class="bg-green-50 text-green-700 p-4 rounded-lg font-bold text-center border border-green-200">
-            ✅ Todos los productos tienen stock suficiente.
+            ✅ Todos los niveles tienen stock suficiente.
           </div>
           
           <div v-else>
             <div class="bg-red-50 text-red-700 p-3 rounded-lg font-bold mb-4 border border-red-200 text-sm">
-              ⚠️ {{ stockCritico.length }} producto(s) necesitan reposición urgente.
+              ⚠️ {{ stockCritico.length }} nivel(es) necesitan reposición urgente.
             </div>
             <div class="overflow-x-auto">
               <table class="w-full text-left border-collapse">
@@ -227,6 +254,7 @@
                   <tr class="border-b-2 border-gray-100 text-sm text-gray-500">
                     <th class="pb-2">Código</th>
                     <th class="pb-2">Nombre</th>
+                    <th class="pb-2 text-center">Nivel</th>
                     <th class="pb-2">Categoría</th>
                     <th class="pb-2 text-center">Stock Actual</th>
                     <th class="pb-2 text-center">Mínimo</th>
@@ -234,9 +262,10 @@
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100">
-                  <tr v-for="s in stockCritico" :key="s.codigo" class="hover:bg-red-50/50">
+                  <tr v-for="(s, idx) in stockCritico" :key="idx" class="hover:bg-red-50/50">
                     <td class="py-3 text-sm text-gray-500">{{ s.codigo }}</td>
                     <td class="py-3 font-medium">{{ s.nombre }}</td>
+                    <td class="py-3 text-center text-sm font-bold capitalize">{{ s.nivel }}</td>
                     <td class="py-3 text-sm">{{ s.categoria }}</td>
                     <td class="py-3 text-center font-black text-red-600">{{ s.stock }}</td>
                     <td class="py-3 text-center text-gray-500">{{ s.minimo }}</td>
@@ -247,6 +276,73 @@
             </div>
           </div>
         </div>
+
+        <div v-if="activeTab === 'compras'">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-white rounded-xl p-4 border border-[#FFE0CC] shadow-sm">
+              <div class="text-sm font-bold text-gray-400 uppercase">🏭 Compras realizadas</div>
+              <div class="text-3xl font-black text-[#FF6B2B] mt-1">{{ kpisCompras.totalCompras }}</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 border border-[#FFE0CC] shadow-sm">
+              <div class="text-sm font-bold text-gray-400 uppercase">💸 Total gastado</div>
+              <div class="text-3xl font-black text-[#FF6B2B] mt-1">Bs. {{ kpisCompras.totalGastado.toFixed(2) }}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div class="lg:col-span-3 overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b-2 border-gray-100 text-sm text-gray-500">
+                    <th class="pb-2">N° Compra</th>
+                    <th class="pb-2">Proveedor</th>
+                    <th class="pb-2">Fecha</th>
+                    <th class="pb-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <tr v-if="compras.length === 0">
+                    <td colspan="4" class="py-4 text-center text-gray-400 text-sm">No se registraron compras en este período.</td>
+                  </tr>
+                  <tr v-for="c in compras" :key="c.id"
+                    @click="cargarDetalleCompraReal(c)"
+                    class="hover:bg-orange-50 cursor-pointer transition-colors"
+                    :class="{'bg-orange-50': compraSeleccionada?.id === c.id}">
+                    <td class="py-3 font-bold text-[#FF6B2B]">{{ c.numero_compra }}</td>
+                    <td class="py-3 text-sm">{{ c.proveedor_nombre }}</td>
+                    <td class="py-3 text-sm">{{ c.fecha.slice(0, 10) }}</td>
+                    <td class="py-3 font-bold">Bs. {{ c.total.toFixed(2) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="text-xs text-gray-400 mt-2">{{ compras.length }} compra(s) en el período.</p>
+            </div>
+
+            <div class="lg:col-span-1 bg-gray-50 p-4 rounded-xl border border-gray-200 h-fit">
+              <h3 class="font-bold text-gray-700 mb-4">Detalle</h3>
+              <div v-if="!compraSeleccionada" class="text-sm text-gray-500 text-center py-8">
+                Haz clic en una compra de la tabla para ver qué se compró.
+              </div>
+              <div v-else>
+                <div class="text-sm font-bold mb-2">Compra: {{ compraSeleccionada.numero_compra }}</div>
+                <div class="text-xs text-gray-600 mb-4">Proveedor: {{ compraSeleccionada.proveedor_nombre }}</div>
+                <div class="space-y-2 max-h-72 overflow-y-auto">
+                  <div v-for="(item, idx) in compraSeleccionada.items" :key="idx"
+                    class="bg-white p-2 border border-gray-200 rounded text-xs">
+                    <div class="flex justify-between">
+                      <div>
+                        <span class="font-bold">{{ item.cantidad }}x</span> {{ item.nombre }}
+                        <span class="text-gray-400 capitalize">({{ item.nivel }})</span>
+                      </div>
+                      <div class="font-bold">Bs. {{ item.subtotal.toFixed(2) }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -267,6 +363,8 @@ const fechaHasta = ref('')
 const activeTab = ref('ventas')
 const ventaSeleccionada = ref(null)
 const cargando = ref(false)
+const descargandoPdf = ref(false)
+const exportando = ref(false)
 
 const kpis = ref({
   transacciones: 0,
@@ -280,6 +378,10 @@ const kpis = ref({
 const ventas = ref([])
 const topProductos = ref([])
 const stockCritico = ref([])
+
+const compras = ref([])
+const compraSeleccionada = ref(null)
+const kpisCompras = ref({ totalCompras: 0, totalGastado: 0 })
 
 const formatearFecha = (fecha) => {
   return fecha.toISOString().split('T')[0]
@@ -328,16 +430,19 @@ const manejarCambioPeriodo = () => {
 const cargarDatosReportes = async () => {
   cargando.value = true
   ventaSeleccionada.value = null
+  compraSeleccionada.value = null
   
   const { inicio, fin } = calcularFechasPorPeriodo()
 
   try {
-    const [resumenVentas, listaVentas, productosMasVendidos, reporteStock, rentabilidad] = await Promise.all([
+    const [resumenVentas, listaVentas, productosMasVendidos, reporteStock, rentabilidad, listaCompras, resumenCompras] = await Promise.all([
       ventasService.getResumenVentas(inicio, fin),
       ventasService.getVentasPorRango(inicio, fin),
       ventasService.getProductosMasVendidos(inicio, fin),
       reportesService.getStockCriticoReporte(),
-      reportesService.getReporteRentabilidad(inicio, fin).catch(() => ({ ganancia_neta: 0 }))
+      reportesService.getReporteRentabilidad(inicio, fin).catch(() => ({ ganancia_neta: 0 })),
+      reportesService.getComprasLista(inicio, fin),
+      reportesService.getComprasResumen(inicio, fin)
     ])
 
     kpis.value = {
@@ -356,6 +461,12 @@ const cargarDatosReportes = async () => {
     ventas.value = listaVentas
     topProductos.value = productosMasVendidos
     stockCritico.value = reporteStock
+
+    compras.value = listaCompras
+    kpisCompras.value = {
+      totalCompras: resumenCompras.total_compras || 0,
+      totalGastado: resumenCompras.total_gastado || 0
+    }
 
   } catch (error) {
     console.error("Error al conectar con la API de Reportes:", error)
@@ -376,7 +487,17 @@ const cargarDetalleVentaReal = async (venta) => {
   }
 }
 
+const cargarDetalleCompraReal = async (compra) => {
+  try {
+    const items = await reportesService.getDetalleCompra(compra.id)
+    compraSeleccionada.value = { ...compra, items }
+  } catch (error) {
+    console.error("Error al consultar el detalle de compra:", error)
+  }
+}
+
 const descargarFacturaPDF = async (ventaId) => {
+  descargandoPdf.value = true
   try {
     const response = await api.get(`/ventas/${ventaId}/pdf`, { responseType: 'blob' })
     const url = window.URL.createObjectURL(new Blob([response.data]))
@@ -386,8 +507,32 @@ const descargarFacturaPDF = async (ventaId) => {
     document.body.appendChild(link)
     link.click()
     link.remove()
+    window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error("No se pudo generar o descargar el documento PDF", error)
+    alert('❌ No se pudo descargar el PDF: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    descargandoPdf.value = false
+  }
+}
+
+const exportarExcel = async () => {
+  exportando.value = true
+  try {
+    const blob = await reportesService.descargarExcel(fechaDesde.value, fechaHasta.value)
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Reporte_${fechaDesde.value}_a_${fechaHasta.value}.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error("No se pudo generar el Excel", error)
+    alert('❌ No se pudo generar el Excel: ' + (error.response?.data?.detail || error.message))
+  } finally {
+    exportando.value = false
   }
 }
 

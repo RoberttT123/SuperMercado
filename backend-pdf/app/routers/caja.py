@@ -5,6 +5,13 @@ from datetime import datetime
 router = APIRouter(prefix="/caja", tags=["Caja"])
 
 
+def _monto_cobrado_ahora(v):
+    total = v["total"]
+    if v.get("es_credito"):
+        return min(v.get("monto_recibido") or 0, total)
+    return total
+
+
 @router.get("/activa")
 def get_caja_activa():
     result = supabase.table("cajas")\
@@ -33,22 +40,26 @@ def get_resumen_caja(caja_id: int):
     if not caja.data:
         raise HTTPException(status_code=404, detail="Caja no encontrada")
 
-    fecha_apertura = caja.data[0]["fecha_apertura"]
-
     ventas = supabase.table("ventas")\
-        .select("total, metodo_pago, descuento")\
+        .select("total, metodo_pago, descuento, es_credito, monto_recibido")\
         .eq("caja_id", caja_id)\
         .eq("estado", "completada")\
         .execute()
 
     total_ingresos = sum(v["total"] for v in ventas.data)
-    efectivo = sum(v["total"] for v in ventas.data if v.get("metodo_pago") == "efectivo")
-    qr = sum(v["total"] for v in ventas.data if v.get("metodo_pago") in ["qr", "transferencia"])
-    tarjeta = sum(v["total"] for v in ventas.data if v.get("metodo_pago") == "tarjeta")
+    total_credito = sum(
+        max(0, v["total"] - (v.get("monto_recibido") or 0))
+        for v in ventas.data if v.get("es_credito")
+    )
+
+    efectivo = sum(_monto_cobrado_ahora(v) for v in ventas.data if v.get("metodo_pago") == "efectivo")
+    qr = sum(_monto_cobrado_ahora(v) for v in ventas.data if v.get("metodo_pago") in ["qr", "transferencia"])
+    tarjeta = sum(_monto_cobrado_ahora(v) for v in ventas.data if v.get("metodo_pago") == "tarjeta")
 
     return {
         "total_transacciones": len(ventas.data),
         "total_ingresos": total_ingresos,
+        "total_credito": total_credito,
         "efectivo": efectivo,
         "qr": qr,
         "tarjeta": tarjeta
@@ -57,7 +68,6 @@ def get_resumen_caja(caja_id: int):
 
 @router.post("/abrir")
 def abrir_caja(data: dict):
-    # Verificar que no haya una caja abierta
     activa = supabase.table("cajas")\
         .select("id")\
         .eq("estado", "abierta")\
@@ -83,15 +93,13 @@ def cerrar_caja(caja_id: int, data: dict):
     if caja.data[0]["estado"] == "cerrada":
         raise HTTPException(status_code=400, detail="La caja ya está cerrada")
 
-    # Calcular resumen
     ventas = supabase.table("ventas")\
-        .select("total, metodo_pago")\
+        .select("total, metodo_pago, es_credito, monto_recibido")\
         .eq("caja_id", caja_id)\
         .eq("estado", "completada")\
         .execute()
 
-    total_ventas = sum(v["total"] for v in ventas.data)
-    efectivo_ventas = sum(v["total"] for v in ventas.data if v.get("metodo_pago") == "efectivo")
+    efectivo_ventas = sum(_monto_cobrado_ahora(v) for v in ventas.data if v.get("metodo_pago") == "efectivo")
     monto_esperado = caja.data[0]["monto_inicial"] + efectivo_ventas
     diferencia = data["monto_contado"] - monto_esperado
 

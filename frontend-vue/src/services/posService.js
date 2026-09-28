@@ -22,6 +22,18 @@ const posService = {
       params: { inicio: hoy, fin: hoy }
     });
     return res.data;
+  },
+
+  async descargarPDF(ventaId) {
+    const res = await api.get(`/ventas/${ventaId}/pdf`, { responseType: 'blob' });
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Venta_${ventaId}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
   }
 };
 

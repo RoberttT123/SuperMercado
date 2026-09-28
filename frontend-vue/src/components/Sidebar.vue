@@ -3,7 +3,7 @@
   <!-- ═══════════════════════════════════════
        VENDEDOR — Overlay móvil
   ════════════════════════════════════════ -->
-  <div v-if="!esAdmin">
+  <div v-if="esVendedor">
 
     <!-- Botón flotante abrir -->
     <button
@@ -77,6 +77,19 @@
                 <div class="text-xs text-gray-400">Preventa y gestión de entregas</div>
               </div>
             </router-link>
+
+            <router-link
+              to="/clientes"
+              @click="sidebarAbierto = false"
+              class="nav-link-vendedor"
+              active-class="nav-active-vendedor"
+            >
+              <span class="text-2xl">👥</span>
+              <div>
+                <div class="font-bold text-sm">Clientes</div>
+                <div class="text-xs text-gray-400">Buscar o registrar clientes</div>
+              </div>
+            </router-link>
           </nav>
         </div>
       </div>
@@ -98,7 +111,7 @@
 
 
   <!-- ═══════════════════════════════════════
-       ADMIN — Sidebar fijo colapsable
+       ADMIN / CAJERO — Sidebar fijo colapsable
   ════════════════════════════════════════ -->
   <aside
     v-else
@@ -129,6 +142,13 @@
         <p v-if="!isCollapsed" class="text-[#FFE4D4] text-[10px] italic mt-1">Precio, calidad y confianza.</p>
       </div>
 
+      <!-- Rol actual (solo cajero, para que sepa que su vista está limitada) -->
+      <div v-if="esCajero && !isCollapsed" class="mx-3 mt-3 text-center">
+        <span class="inline-block bg-white/70 border border-[#FFD0B8] text-[#E85510] text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full">
+          Cajero — {{ authStore.user?.username }}
+        </span>
+      </div>
+
       <!-- Estado caja -->
       <div v-if="!isCollapsed">
         <div v-if="cajaStore.cajaAbierta"
@@ -151,36 +171,39 @@
         </span>
       </div>
 
-      <!-- Menú admin -->
+      <!-- Menú -->
       <div class="mt-5">
         <div v-if="!isCollapsed"
           class="text-[10px] font-extrabold tracking-[0.14em] uppercase text-[#A09088] px-5 mb-2">
           Menú
         </div>
         <nav class="flex flex-col gap-1 px-2">
-          <router-link to="/" class="nav-link" active-class="nav-active" title="Dashboard">
+          <router-link v-if="esAdmin || esCajero" to="/" class="nav-link" active-class="nav-active" title="Dashboard">
             🏠 <span v-if="!isCollapsed">Dashboard</span>
           </router-link>
-          <router-link to="/caja" class="nav-link" active-class="nav-active" title="Caja">
+          <router-link v-if="esAdmin || esCajero" to="/caja" class="nav-link" active-class="nav-active" title="Caja">
             💵 <span v-if="!isCollapsed">Control de Caja</span>
           </router-link>
-          <router-link to="/inventario" class="nav-link" active-class="nav-active" title="Inventario">
+          <router-link v-if="esAdmin || esCajero" to="/inventario" class="nav-link" active-class="nav-active" title="Inventario">
             📦 <span v-if="!isCollapsed">Inventario</span>
           </router-link>
-          <router-link to="/pos" class="nav-link" active-class="nav-active" title="POS">
+          <router-link v-if="esAdmin || esCajero" to="/pos" class="nav-link" active-class="nav-active" title="POS">
             🛒 <span v-if="!isCollapsed">Punto de Venta</span>
           </router-link>
-          <router-link to="/reportes" class="nav-link" active-class="nav-active" title="Reportes">
+          <router-link v-if="esAdmin || esCajero" to="/clientes" class="nav-link" active-class="nav-active" title="Clientes">
+            👥 <span v-if="!isCollapsed">Clientes</span>
+          </router-link>
+          <router-link v-if="esAdmin || esCajero" to="/reportes" class="nav-link" active-class="nav-active" title="Reportes">
             📊 <span v-if="!isCollapsed">Reportes</span>
           </router-link>
-          <router-link to="/proveedores" class="nav-link" active-class="nav-active" title="Proveedores">
+          <router-link v-if="esAdmin || esCajero" to="/proveedores" class="nav-link" active-class="nav-active" title="Proveedores">
             🏭 <span v-if="!isCollapsed">Proveedores</span>
           </router-link>
         </nav>
       </div>
     </div>
 
-    <!-- Footer admin -->
+    <!-- Footer -->
     <div class="pb-4">
       <div v-if="!isCollapsed"
         class="bg-white/60 border border-[#FFD0B8] rounded-xl py-2 px-3 mx-3 mb-2">
@@ -222,10 +245,13 @@ const sidebarAbierto = ref(false)
 const hasLogo = ref(true)
 const handleImageError = () => { hasLogo.value = false }
 
-const esAdmin = computed(() => authStore.user?.role === 'admin')
+const rol = computed(() => authStore.user?.role)
+const esAdmin = computed(() => rol.value === 'admin')
+const esCajero = computed(() => rol.value === 'cajero')
+const esVendedor = computed(() => rol.value === 'vendedor')
 
 onMounted(async () => {
-  if (esAdmin.value) {
+  if (esAdmin.value || esCajero.value) {
     await cajaStore.cargarEstado()
   }
 })
@@ -237,7 +263,7 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-/* Admin */
+/* Admin / Cajero */
 .nav-link {
   display: flex;
   align-items: center;

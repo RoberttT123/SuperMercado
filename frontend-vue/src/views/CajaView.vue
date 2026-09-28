@@ -6,13 +6,20 @@
     </div>
 
     <!-- Estado de caja -->
-    <div v-if="cajaStore.cajaAbierta" class="bg-[#0a1f0a] border border-[#4CAF50] border-l-4 rounded-xl p-4 mb-6 text-white">
+    <div v-if="cajaStore.cajaAbierta" class="bg-[#0a1f0a] border border-[#4CAF50] border-l-4 rounded-xl p-4 mb-4 text-white">
       ✅ <strong>Caja abierta</strong> desde {{ formatoFecha(cajaStore.cajaActiva?.fecha_apertura) }}
       &nbsp;|&nbsp; Monto inicial: <strong>Bs. {{ cajaStore.montoInicial.toFixed(2) }}</strong>
       &nbsp;|&nbsp; Cajero: <strong>{{ cajaStore.cajero }}</strong>
     </div>
-    <div v-else class="bg-[#1f0a0a] border border-[#FF6B2B] border-l-4 rounded-xl p-4 mb-6 text-white">
+    <div v-else class="bg-[#1f0a0a] border border-[#FF6B2B] border-l-4 rounded-xl p-4 mb-4 text-white">
       🔒 <strong>No hay caja abierta.</strong> Abre la caja para comenzar a vender.
+    </div>
+
+    <!-- ⚠️ Alerta: caja abierta desde otro día -->
+    <div v-if="cajaStore.cajaAbierta && cajaAbiertaOtroDia"
+      class="bg-yellow-50 border border-yellow-300 border-l-4 rounded-xl p-4 mb-6 text-yellow-800 flex items-center gap-2">
+      ⚠️ <strong>Esta caja lleva {{ diasCajaAbierta }} día(s) abierta</strong> — se abrió el {{ formatoFecha(cajaStore.cajaActiva?.fecha_apertura) }} y todavía no se cerró.
+      Cerrarla y hacer el arqueo diario ayuda a detectar a tiempo si falta o sobra dinero.
     </div>
 
     <!-- Tabs -->
@@ -73,7 +80,7 @@
 
         <div v-else>
           <!-- Resumen KPIs -->
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
             <div class="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
               <div class="text-xs text-gray-500 mb-1">Transacciones</div>
               <div class="text-xl font-bold text-[#FF6B2B]">{{ resumen.total_transacciones }}</div>
@@ -89,6 +96,13 @@
             <div class="text-center p-3 bg-gray-50 rounded-lg border border-gray-100">
               <div class="text-xs text-gray-500 mb-1">📱 QR / Tarjeta</div>
               <div class="text-xl font-bold text-[#FF6B2B]">Bs. {{ (resumen.qr + resumen.tarjeta).toFixed(2) }}</div>
+            </div>
+            <div class="text-center p-3 rounded-lg border"
+              :class="resumen.total_credito > 0 ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-100'">
+              <div class="text-xs text-gray-500 mb-1">🧾 A Crédito</div>
+              <div class="text-xl font-bold" :class="resumen.total_credito > 0 ? 'text-orange-600' : 'text-gray-400'">
+                Bs. {{ resumen.total_credito.toFixed(2) }}
+              </div>
             </div>
           </div>
 
@@ -106,7 +120,10 @@
                   <span class="text-gray-400 ml-2 text-xs">{{ formatoFecha(v.fecha) }}</span>
                 </div>
                 <div class="flex items-center gap-3">
-                  <span class="text-xs capitalize text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{{ v.metodo_pago }}</span>
+                  <span class="text-xs capitalize px-2 py-0.5 rounded"
+                    :class="v.es_credito ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'">
+                    {{ v.es_credito ? 'crédito' : v.metodo_pago }}
+                  </span>
                   <span class="font-bold">Bs. {{ v.total.toFixed(2) }}</span>
                   <span v-if="v.estado === 'anulada'" class="text-xs text-red-500 font-bold">ANULADA</span>
                 </div>
@@ -126,7 +143,10 @@
                 class="w-full p-2 border rounded-lg focus:outline-none focus:border-[#FF6B2B]">
               <p class="text-xs text-gray-400 mt-1">
                 Esperado: Bs. {{ montoEsperado.toFixed(2) }}
-                (inicial Bs. {{ cajaStore.montoInicial.toFixed(2) }} + efectivo Bs. {{ resumen.efectivo.toFixed(2) }})
+                (inicial Bs. {{ cajaStore.montoInicial.toFixed(2) }} + efectivo cobrado Bs. {{ resumen.efectivo.toFixed(2) }})
+              </p>
+              <p v-if="resumen.total_credito > 0" class="text-xs text-orange-500 mt-1">
+                🧾 Bs. {{ resumen.total_credito.toFixed(2) }} vendido a crédito no cuenta aquí — queda pendiente en Cuentas por Cobrar, no en la caja física.
               </p>
             </div>
             <div>
@@ -219,13 +239,16 @@ const activeTab = ref('abrir')
 const cargando = ref(false)
 const cargandoResumen = ref(false)
 
-const resumen = ref({
+const resumenVacio = () => ({
   total_transacciones: 0,
   total_ingresos: 0,
+  total_credito: 0,
   efectivo: 0,
   qr: 0,
   tarjeta: 0
 })
+
+const resumen = ref(resumenVacio())
 const historial = ref([])
 const ultimasVentasCaja = ref([])
 
@@ -243,6 +266,21 @@ const montoEsperado = computed(() =>
 const diferencia = computed(() =>
   montoContado.value - montoEsperado.value
 )
+
+const cajaAbiertaOtroDia = computed(() => {
+  if (!cajaStore.cajaActiva?.fecha_apertura) return false
+  const apertura = new Date(cajaStore.cajaActiva.fecha_apertura)
+  const hoy = new Date()
+  return apertura.toDateString() !== hoy.toDateString()
+})
+const diasCajaAbierta = computed(() => {
+  if (!cajaStore.cajaActiva?.fecha_apertura) return 0
+  const apertura = new Date(cajaStore.cajaActiva.fecha_apertura)
+  apertura.setHours(0, 0, 0, 0)
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  return Math.round((hoy - apertura) / (1000 * 60 * 60 * 24))
+})
 
 // ── AUTO-REFRESH ─────────────────────────────────────────────────────
 let intervalo = null
@@ -268,7 +306,6 @@ const cargarEstado = async () => {
   historial.value = await cajaService.getHistorial()
 }
 
-// ✅ Refresca al cambiar de tab + auto-refresh en tab cerrar
 watch(activeTab, async (tab) => {
   if (intervalo) {
     clearInterval(intervalo)
@@ -278,7 +315,6 @@ watch(activeTab, async (tab) => {
   if (tab === 'cerrar' && cajaStore.cajaId) {
     await cargarResumen()
     await cargarUltimasVentas()
-    // Auto-refresh cada 30 segundos
     intervalo = setInterval(async () => {
       await cargarResumen()
       await cargarUltimasVentas()
@@ -329,7 +365,7 @@ const abrirCaja = async () => {
   cargando.value = true
   try {
     await cajaStore.abrir(formApertura.value.monto, formApertura.value.usuario)
-    resumen.value = { total_transacciones: 0, total_ingresos: 0, efectivo: 0, qr: 0, tarjeta: 0 }
+    resumen.value = resumenVacio()
     ultimasVentasCaja.value = []
     alert(`✅ Caja abierta con Bs. ${formApertura.value.monto.toFixed(2)}`)
     activeTab.value = 'cerrar'
@@ -351,7 +387,7 @@ const cerrarCaja = async () => {
       `Contado:  Bs. ${resultado.monto_contado.toFixed(2)}\n` +
       `Diferencia: Bs. ${resultado.diferencia.toFixed(2)}`
     )
-    resumen.value = { total_transacciones: 0, total_ingresos: 0, efectivo: 0, qr: 0, tarjeta: 0 }
+    resumen.value = resumenVacio()
     ultimasVentasCaja.value = []
     montoContado.value = 0
     notasCierre.value = ''

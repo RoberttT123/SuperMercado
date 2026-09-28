@@ -1,4 +1,4 @@
-  <template>
+<template>
   <div class="p-6 max-w-full">
     <div class="mb-6 border-b border-[#FFE0CC] pb-4">
       <h1 class="text-3xl font-black text-[#FF6B2B] mb-1">📋 Pedidos</h1>
@@ -37,7 +37,7 @@
         <h2 class="text-lg font-bold text-[#FF6B2B] mb-6">Tomar pedido en visita</h2>
 
         <!-- Datos del cliente -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
             <label class="block text-sm font-bold text-gray-700 mb-1">👤 Nombre del cliente *</label>
             <input v-model="formPedido.cliente" type="text" placeholder="Ej: Don Solomeo Paredes"
@@ -47,6 +47,31 @@
             <label class="block text-sm font-bold text-gray-700 mb-1">📝 Notas (opcional)</label>
             <input v-model="formPedido.notas" type="text" placeholder="Ej: entregar el martes"
               class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-base">
+          </div>
+        </div>
+
+        <!-- Vincular a cliente registrado -->
+        <div class="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <label class="block text-sm font-bold text-gray-700 mb-1">🔗 Vincular a cliente registrado (opcional)</label>
+          <p class="text-xs text-gray-500 mb-2">Solo si vinculas un cliente registrado podrás entregarle este pedido a crédito.</p>
+
+          <div v-if="!clienteVinculado">
+            <input v-model="busquedaClientePedido" type="text" placeholder="Buscar cliente por nombre..."
+              class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm">
+            <div v-if="resultadosClientesPedido.length > 0" class="mt-2 border border-gray-200 rounded-xl overflow-hidden bg-white">
+              <div v-for="c in resultadosClientesPedido" :key="c.id" @click="vincularCliente(c)"
+                class="p-2 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-0 text-sm transition-colors">
+                <div class="font-bold">{{ c.nombre }}</div>
+                <div class="text-xs text-gray-400">Debe: Bs. {{ c.saldo_pendiente.toFixed(2) }} · Límite: Bs. {{ c.limite_credito.toFixed(2) }}</div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="flex items-center justify-between bg-white border border-blue-200 rounded-lg p-3">
+            <div>
+              <div class="font-bold text-sm">{{ clienteVinculado.nombre }}</div>
+              <div class="text-xs text-gray-500">Debe: Bs. {{ clienteVinculado.saldo_pendiente.toFixed(2) }} · Límite: Bs. {{ clienteVinculado.limite_credito.toFixed(2) }}</div>
+            </div>
+            <button @click="desvincularCliente" class="text-red-500 text-xs font-bold hover:underline">✕ Quitar</button>
           </div>
         </div>
 
@@ -61,28 +86,42 @@
         <div v-if="busquedaProducto && productosBuscados.length > 0"
           class="mb-6 border border-gray-200 rounded-xl overflow-hidden">
           <div v-for="prod in productosBuscados" :key="prod.id"
-            class="flex items-center justify-between p-4 border-b border-gray-100 last:border-0 hover:bg-orange-50 transition-colors">
-            <div>
-              <div class="font-bold text-sm">{{ prod.nombre }}</div>
-              <div class="text-xs text-gray-400">{{ prod.codigo }} · Bs. {{ prod.precio_venta.toFixed(2) }}</div>
+            class="p-3 border-b border-gray-100 last:border-0 hover:bg-orange-50 transition-colors">
+            <div class="mb-2">
+              <span class="font-bold text-sm">{{ prod.nombre }}</span>
+              <span class="text-xs text-gray-400 ml-2">{{ prod.codigo }}</span>
             </div>
-            <div class="flex items-center gap-3">
-              <!-- ✅ Info de stock — solo informativa, no bloquea -->
-              <span class="text-xs font-bold px-2 py-0.5 rounded-full"
-                :class="prod.stock > prod.stock_minimo
-                  ? 'bg-green-100 text-green-700'
-                  : prod.stock > 0
-                    ? 'bg-yellow-100 text-yellow-700'
-                    : 'bg-red-100 text-red-500'">
-                {{ prod.stock > 0 ? `Stock: ${prod.stock}` : '⚠️ Sin stock' }}
-              </span>
-              <input type="number" min="1"
-                v-model.number="cantidadesTemp[prod.id]"
-                class="w-16 px-2 py-1 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
-              <button @click="agregarAlPedido(prod)"
-                class="bg-[#FF6B2B] text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-[#E85510] transition-colors">
-                ➕
-              </button>
+
+            <div v-if="!prod.niveles || prod.niveles.length === 0" class="text-xs text-gray-400 italic">
+              ⚠️ Este producto no tiene niveles de venta configurados en Inventario.
+            </div>
+
+            <div v-else class="space-y-2">
+              <div v-for="nivel in prod.niveles" :key="nivel.id"
+                class="flex items-center justify-between gap-2 bg-gray-50 rounded-lg p-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-lg">{{ nivelIcono(nivel.nivel) }}</span>
+                  <div class="leading-tight">
+                    <div class="font-bold text-sm capitalize">{{ nivel.nivel }} · Bs. {{ nivel.precio_venta.toFixed(2) }}</div>
+                    <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                      :class="nivel.stock > nivel.stock_minimo
+                        ? 'bg-green-100 text-green-700'
+                        : nivel.stock > 0
+                          ? 'bg-yellow-100 text-yellow-700'
+                          : 'bg-red-100 text-red-500'">
+                      {{ nivel.stock > 0 ? `Stock: ${nivel.stock}` : '⚠️ Sin stock' }}
+                    </span>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="number" min="1" v-model.number="cantidadesTemp[nivel.id]"
+                    class="w-16 px-2 py-1 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
+                  <button @click="agregarAlPedido(prod, nivel)"
+                    class="bg-[#FF6B2B] text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-[#E85510] transition-colors">
+                    ➕
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -99,12 +138,22 @@
             <div v-for="(item, index) in itemsPedido" :key="index"
               class="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50">
               <div class="flex-1">
-                <div class="font-bold text-sm">{{ item.nombre }}</div>
-                <div class="text-xs text-gray-400">Bs. {{ item.precio_venta.toFixed(2) }} c/u</div>
+                <div class="font-bold text-sm">
+                  {{ item.nombre }}
+                  <span class="text-xs text-blue-600 font-normal capitalize">({{ item.nivelNombre }})</span>
+                </div>
               </div>
               <div class="flex items-center gap-4">
-                <input type="number" min="1" v-model.number="item.cantidad"
-                  class="w-16 px-2 py-1 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
+                <div class="flex flex-col items-center">
+                  <label class="text-[9px] text-gray-400 font-bold uppercase">Precio</label>
+                  <input type="number" step="0.01" min="0" v-model.number="item.precio_venta"
+                    class="w-20 px-2 py-1 border rounded-lg text-center text-sm font-bold text-[#FF6B2B] focus:outline-none focus:border-[#FF6B2B]">
+                </div>
+                <div class="flex flex-col items-center">
+                  <label class="text-[9px] text-gray-400 font-bold uppercase">Cant.</label>
+                  <input type="number" min="1" v-model.number="item.cantidad"
+                    class="w-16 px-2 py-1 border rounded-lg text-center text-sm focus:outline-none focus:border-[#FF6B2B]">
+                </div>
                 <span class="text-sm font-bold w-24 text-right">
                   Bs. {{ (item.precio_venta * item.cantidad).toFixed(2) }}
                 </span>
@@ -145,7 +194,6 @@
               <div class="text-sm text-green-700">Cliente: {{ ultimoPedidoGuardado.cliente }}</div>
             </div>
           </div>
-          <!-- ✅ Dos botones PDF -->
           <div class="flex gap-3">
             <button @click="pedidosService.descargarPDF(ultimoPedidoGuardado.id)"
               class="flex-1 bg-white border border-green-300 text-green-700 font-bold text-sm px-4 py-2 rounded-xl hover:bg-green-100 transition-colors">
@@ -182,7 +230,6 @@
               </div>
             </div>
           </div>
-          <!-- ✅ Dos botones PDF -->
           <div class="flex gap-3">
             <button @click="pedidosService.descargarPDF(ultimaEntrega.pedido_id)"
               class="flex-1 bg-white border border-green-200 text-green-700 font-bold text-sm px-3 py-2 rounded-xl hover:bg-green-50 transition-colors">
@@ -216,7 +263,10 @@
               @click="togglePedido(pedido.id)">
               <div>
                 <div class="font-black text-[#FF6B2B]">{{ pedido.numero }}</div>
-                <div class="text-sm font-bold text-gray-700">{{ pedido.cliente }}</div>
+                <div class="text-sm font-bold text-gray-700">
+                  {{ pedido.cliente }}
+                  <span v-if="pedido.cliente_registrado" class="ml-1 text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-bold">VINCULADO</span>
+                </div>
                 <div class="text-xs text-gray-400">
                   {{ formatoFecha(pedido.fecha) }}
                   <span v-if="pedido.notas"> · 📝 {{ pedido.notas }}</span>
@@ -241,7 +291,7 @@
                 <div v-if="editandoId === pedido.id">
                   <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4">
                     <div class="font-bold text-blue-800 text-sm mb-1">✏️ Modo edición</div>
-                    <div class="text-xs text-blue-600">Edita cantidades, elimina o agrega productos. Guarda cuando termines.</div>
+                    <div class="text-xs text-blue-600">Edita cantidades, precios, elimina o agrega productos. Guarda cuando termines.</div>
                   </div>
 
                   <!-- Notas editables -->
@@ -259,8 +309,15 @@
                       <div v-for="(item, index) in formEdicionPedido.items" :key="index"
                         class="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-xl">
                         <div class="flex-1">
-                          <div class="font-bold text-sm">{{ item.nombre }}</div>
-                          <div class="text-xs text-gray-400">Bs. {{ item.precio_venta.toFixed(2) }} c/u</div>
+                          <div class="font-bold text-sm">
+                            {{ item.nombre }}
+                            <span class="text-xs text-blue-600 font-normal capitalize">({{ item.nivelNombre }})</span>
+                          </div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                          <label class="text-[9px] text-gray-400 font-bold uppercase">Precio</label>
+                          <input type="number" step="0.01" min="0" v-model.number="item.precio_venta"
+                            class="w-20 text-center border border-gray-200 rounded-lg py-1 text-sm font-bold text-[#FF6B2B] focus:outline-none focus:border-[#FF6B2B]">
                         </div>
                         <div class="flex items-center gap-2">
                           <button @click="item.cantidad = Math.max(1, item.cantidad - 1)"
@@ -291,16 +348,20 @@
                     <input v-model="busquedaEdicion" type="text"
                       placeholder="Buscar producto para agregar..."
                       class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm mb-2">
-                    <div v-if="productosParaEdicion.length > 0"
-                      class="border border-gray-200 rounded-lg overflow-hidden">
+                    <div v-if="productosParaEdicion.length > 0" class="space-y-2">
                       <div v-for="prod in productosParaEdicion" :key="prod.id"
-                        class="flex items-center justify-between p-2 hover:bg-orange-50 border-b border-gray-100 last:border-0 cursor-pointer transition-colors"
-                        @click="agregarProductoEdicion(prod)">
-                        <div>
-                          <div class="font-bold text-xs">{{ prod.nombre }}</div>
-                          <div class="text-[10px] text-gray-400">Bs. {{ prod.precio_venta.toFixed(2) }} · Stock: {{ prod.stock }}</div>
+                        class="p-2 border border-gray-200 rounded-lg bg-white">
+                        <div class="font-bold text-xs mb-1">{{ prod.nombre }}</div>
+                        <div v-if="!prod.niveles || prod.niveles.length === 0" class="text-[10px] text-gray-400 italic">
+                          Sin niveles configurados
                         </div>
-                        <span class="text-[#FF6B2B] font-black text-lg">+</span>
+                        <div v-else class="flex flex-wrap gap-1">
+                          <button v-for="nivel in prod.niveles" :key="nivel.id"
+                            @click="agregarProductoEdicion(prod, nivel)"
+                            class="text-[10px] bg-orange-50 hover:bg-orange-100 text-[#FF6B2B] font-bold px-2 py-1 rounded-lg border border-orange-200 capitalize">
+                            {{ nivelIcono(nivel.nivel) }} {{ nivel.nivel }} · Bs.{{ nivel.precio_venta.toFixed(2) }} (stock {{ nivel.stock }})
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -331,6 +392,7 @@
                     <thead>
                       <tr class="border-b border-gray-100 text-xs text-gray-500">
                         <th class="pb-2">Producto</th>
+                        <th class="pb-2 text-center">Nivel</th>
                         <th class="pb-2 text-center">Cant.</th>
                         <th class="pb-2 text-right">P. Venta</th>
                         <th class="pb-2 text-right">Subtotal</th>
@@ -340,6 +402,7 @@
                       <tr v-for="item in detallesPedidos[pedido.id]" :key="item.id"
                         class="border-b border-gray-50">
                         <td class="py-2 text-sm font-medium">{{ (item.productos || {}).nombre || '—' }}</td>
+                        <td class="py-2 text-sm text-center capitalize">{{ (item.producto_niveles || {}).nivel || '—' }}</td>
                         <td class="py-2 text-sm text-center font-bold">{{ item.cantidad }}</td>
                         <td class="py-2 text-sm text-right">Bs. {{ item.precio_venta.toFixed(2) }}</td>
                         <td class="py-2 text-sm text-right font-bold">
@@ -357,6 +420,29 @@
                   <div v-if="entregandoId === pedido.id"
                     class="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4">
                     <h4 class="font-bold text-gray-700 mb-3">💳 Confirmar entrega y cobro</h4>
+
+                    <!-- Opción de crédito -->
+                    <div v-if="pedido.cliente_registrado" class="mb-4 bg-white p-3 rounded-lg border border-gray-200">
+                      <label class="flex items-center gap-2" :class="{ 'opacity-40 cursor-not-allowed': pedido.cliente_registrado.limite_credito <= 0 }">
+                        <input type="checkbox" v-model="esCreditoEntrega" :disabled="pedido.cliente_registrado.limite_credito <= 0">
+                        <span class="text-sm font-bold text-gray-700">🧾 Entregar a crédito (fiado)</span>
+                      </label>
+                      <p v-if="pedido.cliente_registrado.limite_credito <= 0" class="text-xs text-red-500 mt-1">
+                        Este cliente no tiene línea de crédito habilitada.
+                      </p>
+                      <div v-if="esCreditoEntrega" class="mt-2">
+                        <p class="text-xs text-gray-600">
+                          Queda a crédito: <strong class="text-red-600">Bs. {{ Math.max(0, totalPedido(detallesPedidos[pedido.id]) - formEntrega.monto_recibido).toFixed(2) }}</strong>
+                        </p>
+                        <div v-if="advertenciaCreditoEntrega(pedido)" class="mt-1 bg-red-50 text-red-700 text-xs font-bold p-2 rounded-lg border border-red-200">
+                          ⚠️ {{ advertenciaCreditoEntrega(pedido) }}
+                        </div>
+                      </div>
+                    </div>
+                    <div v-else class="mb-4 text-xs text-gray-400 italic">
+                      Este pedido no está vinculado a un cliente registrado — no se puede entregar a crédito.
+                    </div>
+
                     <div class="grid grid-cols-2 gap-4">
                       <div>
                         <label class="block text-xs font-bold text-gray-600 mb-1">Método de pago</label>
@@ -367,11 +453,13 @@
                           <option value="tarjeta">💳 Tarjeta</option>
                         </select>
                       </div>
-                      <div v-if="formEntrega.metodo_pago === 'efectivo'">
-                        <label class="block text-xs font-bold text-gray-600 mb-1">Monto recibido</label>
+                      <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1">
+                          {{ esCreditoEntrega ? 'Monto que paga ahora' : 'Monto recibido' }}
+                        </label>
                         <input type="number" v-model.number="formEntrega.monto_recibido" min="0" step="0.5"
                           class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:outline-none focus:border-[#FF6B2B] text-sm">
-                        <p class="text-xs text-gray-400 mt-1">
+                        <p v-if="!esCreditoEntrega && formEntrega.metodo_pago === 'efectivo'" class="text-xs text-gray-400 mt-1">
                           Cambio: Bs. {{ Math.max(0, formEntrega.monto_recibido - totalPedido(detallesPedidos[pedido.id])).toFixed(2) }}
                         </p>
                       </div>
@@ -548,7 +636,12 @@
                 <div class="space-y-1 mb-4">
                   <div v-for="item in detallesHistorial[pedido.id]" :key="item.id"
                     class="flex justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
-                    <span class="font-medium">{{ (item.productos || {}).nombre || '—' }}</span>
+                    <span class="font-medium">
+                      {{ (item.productos || {}).nombre || '—' }}
+                      <span v-if="(item.producto_niveles || {}).nivel" class="text-xs text-gray-400 capitalize">
+                        ({{ item.producto_niveles.nivel }})
+                      </span>
+                    </span>
                     <span class="text-gray-600">
                       x{{ item.cantidad }} · Bs. {{ (item.cantidad * item.precio_venta).toFixed(2) }}
                     </span>
@@ -556,15 +649,13 @@
                 </div>
               </div>
 
-              <!-- ✅ Botones PDF según estado -->
+              <!-- Botones PDF según estado -->
               <div class="flex gap-3 mt-4">
-                <!-- Siempre: preventa -->
                 <button @click="pedidosService.descargarPDF(pedido.id)"
                   class="flex-1 bg-white border border-[#FFE0CC] text-[#FF6B2B] font-bold py-2 rounded-xl hover:bg-orange-50 transition-colors text-sm">
                   📋 Nota Preventa
                 </button>
 
-                <!-- Solo si entregado: nota de venta final -->
                 <button
                   v-if="pedido.estado === 'entregado' && pedido.venta_id"
                   @click="pedidosService.descargarNotaVenta(pedido.id)"
@@ -583,10 +674,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import pedidosService from '@/services/pedidosService'
 import inventarioService from '@/services/inventarioService'
+import clientesService from '@/services/clientesService'
 
 const authStore = useAuthStore()
 const activeTab = ref('nuevo')
@@ -595,6 +687,10 @@ const guardando = ref(false)
 const procesando = ref(false)
 const cargandoHistorial = ref(false)
 
+const nivelIcono = (nivel) => ({
+  jaba: '🧃', caja: '📦', paquete: '🥡', bolsa: '🛍️', unidad: '🔹'
+}[nivel] || '📦')
+
 // ── NUEVO PEDIDO ─────────────────────────────────────────────────────
 const formPedido = ref({ cliente: '', notas: '' })
 const busquedaProducto = ref('')
@@ -602,6 +698,29 @@ const itemsPedido = ref([])
 const cantidadesTemp = ref({})
 const ultimoPedidoGuardado = ref(null)
 const todosProductos = ref([])
+
+// Vincular cliente registrado
+const busquedaClientePedido = ref('')
+const resultadosClientesPedido = ref([])
+const clienteVinculado = ref(null)
+
+let debounceClientePedidoTimer = null
+watch(busquedaClientePedido, (val) => {
+  clearTimeout(debounceClientePedidoTimer)
+  if (!val || val.trim().length < 2) { resultadosClientesPedido.value = []; return }
+  debounceClientePedidoTimer = setTimeout(async () => {
+    try {
+      resultadosClientesPedido.value = await clientesService.buscarCliente(val.trim())
+    } catch (e) { console.error(e) }
+  }, 300)
+})
+
+const vincularCliente = (c) => {
+  clienteVinculado.value = c
+  busquedaClientePedido.value = ''
+  resultadosClientesPedido.value = []
+}
+const desvincularCliente = () => { clienteVinculado.value = null }
 
 onMounted(async () => {
   try {
@@ -615,25 +734,26 @@ const productosBuscados = computed(() => {
   const term = busquedaProducto.value.toLowerCase()
   return todosProductos.value
     .filter(p => p.nombre.toLowerCase().includes(term) || p.codigo.includes(term))
-    // ✅ Sin filtro de stock — muestra todos para logística
-    .slice(0, 8)  // ← muestra más resultados
+    .slice(0, 8)
 })
 
-const agregarAlPedido = (prod) => {
-  const cantidad = cantidadesTemp.value[prod.id] || 1
-  const index = itemsPedido.value.findIndex(i => i.producto_id === prod.id)
+const agregarAlPedido = (prod, nivel) => {
+  const cantidad = cantidadesTemp.value[nivel.id] || 1
+  const index = itemsPedido.value.findIndex(i => i.nivel_id === nivel.id)
   if (index !== -1) {
     itemsPedido.value[index].cantidad += cantidad
   } else {
     itemsPedido.value.push({
       producto_id: prod.id,
+      nivel_id: nivel.id,
       nombre: prod.nombre,
-      precio_venta: prod.precio_venta,
-      precio_compra: prod.precio_compra,
+      nivelNombre: nivel.nivel,
+      precio_venta: nivel.precio_venta,
+      precio_compra: nivel.precio_compra,
       cantidad
     })
   }
-  cantidadesTemp.value[prod.id] = 1
+  cantidadesTemp.value[nivel.id] = 1
   busquedaProducto.value = ''
 }
 
@@ -646,10 +766,12 @@ const guardarPedido = async () => {
   try {
     const resultado = await pedidosService.crearPedido({
       cliente: formPedido.value.cliente,
+      cliente_id: clienteVinculado.value?.id || null,
       vendedor: authStore.user?.username,
       notas: formPedido.value.notas,
       items: itemsPedido.value.map(i => ({
         producto_id: i.producto_id,
+        nivel_id: i.nivel_id,
         cantidad: i.cantidad,
         precio_venta: i.precio_venta
       }))
@@ -662,7 +784,6 @@ const guardarPedido = async () => {
     }
     limpiarPedido()
 
-    // ✅ Ofrecer descarga de preventa automáticamente
     const descargar = confirm(
       `✅ Pedido ${resultado.numero} guardado\n\n¿Descargar la Nota de Preventa para el cliente?`
     )
@@ -680,6 +801,7 @@ const limpiarPedido = () => {
   itemsPedido.value = []
   formPedido.value = { cliente: '', notas: '' }
   busquedaProducto.value = ''
+  desvincularCliente()
 }
 
 // ── PEDIDOS PENDIENTES ───────────────────────────────────────────────
@@ -688,8 +810,8 @@ const pedidoAbierto = ref(null)
 const detallesPedidos = ref({})
 const entregandoId = ref(null)
 const formEntrega = ref({ metodo_pago: 'efectivo', monto_recibido: 0 })
+const esCreditoEntrega = ref(false)
 
-// ✅ Guarda el resultado de la última entrega para PDF
 const ultimaEntrega = ref(null)
 
 const cargarPendientes = async () => {
@@ -721,30 +843,47 @@ const totalPedido = (items) => {
 const iniciarEntrega = (pedido) => {
   entregandoId.value = pedido.id
   editandoId.value = null
+  esCreditoEntrega.value = false
   formEntrega.value = {
     metodo_pago: 'efectivo',
     monto_recibido: totalPedido(detallesPedidos.value[pedido.id])
   }
 }
 
+const advertenciaCreditoEntrega = (pedido) => {
+  if (!esCreditoEntrega.value || !pedido.cliente_registrado) return null
+  const saldoNuevo = pedido.cliente_registrado.saldo_pendiente +
+    Math.max(0, totalPedido(detallesPedidos.value[pedido.id]) - formEntrega.value.monto_recibido)
+  if (pedido.cliente_registrado.limite_credito > 0 && saldoNuevo > pedido.cliente_registrado.limite_credito) {
+    return `Este cliente quedaría debiendo Bs. ${saldoNuevo.toFixed(2)}, superando su límite de Bs. ${pedido.cliente_registrado.limite_credito.toFixed(2)}.`
+  }
+  return null
+}
+
 const confirmarEntrega = async (pedido) => {
+  if (esCreditoEntrega.value && (!pedido.cliente_registrado || pedido.cliente_registrado.limite_credito <= 0)) {
+    alert('⚠️ Este cliente no tiene línea de crédito habilitada')
+    return
+  }
+
   procesando.value = true
   try {
     const items = detallesPedidos.value[pedido.id].map(i => ({
       producto_id: i.producto_id,
+      nivel_id: i.nivel_id,
       cantidad: i.cantidad,
       precio_venta: i.precio_venta,
-      precio_compra: 0,
+      precio_compra: (i.producto_niveles || {}).precio_compra || 0,
       subtotal: i.cantidad * i.precio_venta
     }))
 
     const resultado = await pedidosService.entregarPedido(pedido.id, {
       items,
       metodo_pago: formEntrega.value.metodo_pago,
-      monto_recibido: formEntrega.value.monto_recibido
+      monto_recibido: formEntrega.value.monto_recibido,
+      es_credito: esCreditoEntrega.value
     })
 
-    // ✅ Guardar para mostrar botón de descarga
     ultimaEntrega.value = {
       pedido_id: pedido.id,
       numero_pedido: pedido.numero,
@@ -757,7 +896,6 @@ const confirmarEntrega = async (pedido) => {
     pedidoAbierto.value = null
     await cargarPendientes()
 
-    // ✅ Ofrecer descarga de nota de venta automáticamente
     const descargar = confirm(
       `✅ Entrega confirmada\n` +
       `Venta: ${resultado.numero_venta}\n` +
@@ -811,7 +949,9 @@ const iniciarEdicion = (pedido) => {
     notas: pedido.notas || '',
     items: items.map(i => ({
       producto_id: i.producto_id,
+      nivel_id: i.nivel_id,
       nombre: (i.productos || {}).nombre || '—',
+      nivelNombre: (i.producto_niveles || {}).nivel || '',
       precio_venta: i.precio_venta,
       cantidad: i.cantidad
     }))
@@ -824,15 +964,17 @@ const cancelarEdicion = () => {
   formEdicionPedido.value = { notas: '', items: [] }
 }
 
-const agregarProductoEdicion = (prod) => {
-  const existe = formEdicionPedido.value.items.findIndex(i => i.producto_id === prod.id)
+const agregarProductoEdicion = (prod, nivel) => {
+  const existe = formEdicionPedido.value.items.findIndex(i => i.nivel_id === nivel.id)
   if (existe !== -1) {
     formEdicionPedido.value.items[existe].cantidad++
   } else {
     formEdicionPedido.value.items.push({
       producto_id: prod.id,
+      nivel_id: nivel.id,
       nombre: prod.nombre,
-      precio_venta: prod.precio_venta,
+      nivelNombre: nivel.nivel,
+      precio_venta: nivel.precio_venta,
       cantidad: 1
     })
   }
@@ -850,6 +992,7 @@ const guardarEdicionPedido = async (pedidoId) => {
       notas: formEdicionPedido.value.notas,
       items: formEdicionPedido.value.items.map(i => ({
         producto_id: i.producto_id,
+        nivel_id: i.nivel_id,
         cantidad: i.cantidad,
         precio_venta: i.precio_venta
       }))

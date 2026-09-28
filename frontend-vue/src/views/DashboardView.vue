@@ -31,7 +31,7 @@
     <div v-else>
 
       <!-- KPIs -->
-      <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <section class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div class="bg-white rounded-2xl p-5 border border-[#FFE0CC] shadow-sm">
           <div class="text-xs font-bold text-gray-400 uppercase mb-1">💰 Ventas Hoy</div>
           <div class="text-3xl font-black text-[#FF6B2B]">Bs. {{ resumen.ventas_hoy.toFixed(2) }}</div>
@@ -67,7 +67,23 @@
           </div>
           <div class="text-xs mt-1"
             :class="resumen.productos_criticos > 0 ? 'text-red-500' : 'text-gray-400'">
-            {{ resumen.productos_criticos > 0 ? 'productos necesitan reposición' : 'todo en orden ✅' }}
+            {{ resumen.productos_criticos > 0 ? 'niveles necesitan reposición' : 'todo en orden ✅' }}
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-5 border shadow-sm"
+          :class="resumen.total_por_cobrar > 0 ? 'border-orange-300 bg-orange-50' : 'border-[#FFE0CC]'">
+          <div class="text-xs font-bold uppercase mb-1"
+            :class="resumen.total_por_cobrar > 0 ? 'text-orange-500' : 'text-gray-400'">
+            💰 Por Cobrar
+          </div>
+          <div class="text-3xl font-black"
+            :class="resumen.total_por_cobrar > 0 ? 'text-orange-600' : 'text-gray-400'">
+            Bs. {{ resumen.total_por_cobrar.toFixed(0) }}
+          </div>
+          <div class="text-xs mt-1"
+            :class="resumen.total_por_cobrar > 0 ? 'text-orange-500' : 'text-gray-400'">
+            {{ resumen.clientes_con_deuda > 0 ? resumen.clientes_con_deuda + ' cliente(s) con deuda' : 'sin deudas pendientes ✅' }}
           </div>
         </div>
       </section>
@@ -134,8 +150,8 @@
         </div>
       </section>
 
-      <!-- ÚLTIMAS VENTAS + STOCK CRÍTICO -->
-      <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <!-- ÚLTIMAS VENTAS + STOCK CRÍTICO + POR COBRAR -->
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
 
         <!-- Últimas ventas -->
         <div class="bg-white rounded-2xl p-6 border border-[#FFE0CC] shadow-sm">
@@ -154,11 +170,11 @@
             >
               <div>
                 <div class="font-bold text-sm text-[#FF6B2B]">{{ venta.numero_venta }}</div>
-                <div class="text-xs text-gray-400">{{ formatoFecha(venta.fecha) }}</div>
+                <div class="text-xs text-gray-400">{{ venta.cliente_nombre || 'Consumidor final' }} · {{ formatoFecha(venta.fecha) }}</div>
               </div>
               <div class="text-right">
                 <div class="font-black text-gray-800">Bs. {{ venta.total.toFixed(2) }}</div>
-                <div class="text-xs capitalize text-gray-400">{{ venta.metodo_pago }}</div>
+                <div class="text-xs capitalize text-gray-400">{{ venta.es_credito ? 'crédito' : venta.metodo_pago }}</div>
               </div>
             </div>
           </div>
@@ -176,18 +192,45 @@
           </div>
           <div v-else class="space-y-2">
             <div
-              v-for="prod in stockCritico"
-              :key="prod.nombre"
+              v-for="(prod, idx) in stockCritico"
+              :key="idx"
               class="flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-100"
             >
               <div>
                 <div class="font-bold text-sm text-gray-800">{{ prod.nombre }}</div>
-                <div class="text-xs text-gray-400">{{ prod.categoria }}</div>
+                <div class="text-xs text-gray-400 capitalize">{{ prod.nivel }} · {{ prod.categoria }}</div>
               </div>
               <div class="text-right">
                 <div class="font-black text-red-600 text-lg">{{ prod.stock }}</div>
                 <div class="text-xs text-gray-400">mín: {{ prod.stock_minimo }}</div>
                 <div class="text-xs font-bold text-red-500">faltan {{ prod.faltante }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cuentas por cobrar -->
+        <div class="bg-white rounded-2xl p-6 border border-[#FFE0CC] shadow-sm">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold text-[#FF6B2B]">💰 Cuentas por Cobrar</h2>
+            <router-link to="/clientes" class="text-xs text-[#FF6B2B] font-bold hover:underline">Ver todas →</router-link>
+          </div>
+          <div v-if="deudores.length === 0" class="text-center py-6">
+            <div class="text-3xl mb-2">✅</div>
+            <div class="text-green-600 font-bold text-sm">Ningún cliente tiene deuda</div>
+          </div>
+          <div v-else class="space-y-2">
+            <div
+              v-for="c in deudores"
+              :key="c.id"
+              class="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100"
+            >
+              <div>
+                <div class="font-bold text-sm text-gray-800">{{ c.nombre }}</div>
+                <div class="text-xs text-gray-400">{{ c.telefono || 'sin teléfono' }}</div>
+              </div>
+              <div class="text-right">
+                <div class="font-black text-orange-600">Bs. {{ c.saldo_pendiente.toFixed(2) }}</div>
               </div>
             </div>
           </div>
@@ -245,13 +288,16 @@ const resumen = ref({
   ventas_mes: 0,
   transacciones_mes: 0,
   ganancia_neta_mes: 0,
-  productos_criticos: 0
+  productos_criticos: 0,
+  total_por_cobrar: 0,
+  clientes_con_deuda: 0
 })
 
 const ventasSemana = ref([])
 const topProductos = ref([])
 const ultimasVentas = ref([])
 const stockCritico = ref([])
+const deudores = ref([])
 
 const maxVentaSemana = computed(() =>
   Math.max(...ventasSemana.value.map(d => d.total), 1)
@@ -264,17 +310,19 @@ const fechaHoy = new Date().toLocaleDateString('es-BO', {
 onMounted(async () => {
   cargando.value = true
   try {
-    const [r, semana, ultimas, stock] = await Promise.all([
+    const [r, semana, ultimas, stock, cobrar] = await Promise.all([
       dashboardService.getResumen(),
       dashboardService.getVentasSemana(),
       dashboardService.getUltimasVentas(),
-      dashboardService.getStockCritico()
+      dashboardService.getStockCritico(),
+      dashboardService.getCuentasPorCobrar()
     ])
     resumen.value = r
     ventasSemana.value = semana
-    topProductos.value = r.top_productos   // ← viene incluido en resumen ahora
+    topProductos.value = r.top_productos
     ultimasVentas.value = ultimas
     stockCritico.value = stock
+    deudores.value = cobrar
 
     await cajaStore.cargarEstado()
   } catch (e) {

@@ -12,48 +12,58 @@ router = APIRouter(prefix="/pedidos", tags=["Pedidos"])
 
 class ItemPedido(BaseModel):
     producto_id: int
+    nivel_id: int
     cantidad: int
     precio_venta: float
 
 
 class PedidoCreate(BaseModel):
     cliente: str
+    cliente_id: Optional[int] = None
     vendedor: Optional[str] = None
     notas: Optional[str] = None
     items: List[ItemPedido]
+
+
+def _adjuntar_cliente_registrado(filas: list) -> list:
+    for f in filas:
+        f["cliente_registrado"] = f.get("clientes")
+        f.pop("clientes", None)
+    return filas
 
 
 # ── Rutas SIN parámetros dinámicos PRIMERO ──────────────────────────
 
 @router.get("/")
 def get_pedidos(estado: Optional[str] = None):
-    query = supabase.table("pedidos").select("*").order("fecha", desc=True)
+    query = supabase.table("pedidos")\
+        .select("*, clientes(nombre, saldo_pendiente, limite_credito)")\
+        .order("fecha", desc=True)
     if estado:
         query = query.eq("estado", estado)
-    return query.execute().data
+    return _adjuntar_cliente_registrado(query.execute().data)
 
 
 @router.get("/pendientes")
 def get_pedidos_pendientes(vendedor: Optional[str] = None):
     query = supabase.table("pedidos")\
-        .select("*")\
+        .select("*, clientes(nombre, saldo_pendiente, limite_credito)")\
         .eq("estado", "pendiente")\
         .order("fecha", desc=True)
     if vendedor:
         query = query.eq("vendedor", vendedor)
-    return query.execute().data
+    return _adjuntar_cliente_registrado(query.execute().data)
 
 
-# ✅ CRÍTICO: /historial ANTES de /{pedido_id}
 @router.get("/historial")
 def get_historial(vendedor: Optional[str] = None):
     query = supabase.table("pedidos")\
-        .select("*, ventas(numero_venta, total, fecha, metodo_pago)")\
+        .select("*, ventas(numero_venta, total, fecha, metodo_pago), clientes(nombre, saldo_pendiente, limite_credito)")\
         .order("fecha", desc=True)\
         .limit(100)
     if vendedor:
         query = query.eq("vendedor", vendedor)
-    return query.execute().data
+    return _adjuntar_cliente_registrado(query.execute().data)
 
 
 @router.post("/")
@@ -63,6 +73,7 @@ def crear_pedido(pedido: PedidoCreate):
     nuevo = supabase.table("pedidos").insert({
         "numero": numero,
         "cliente": pedido.cliente,
+        "cliente_id": pedido.cliente_id,
         "vendedor": pedido.vendedor,
         "notas": pedido.notas,
         "estado": "pendiente",
@@ -71,10 +82,10 @@ def crear_pedido(pedido: PedidoCreate):
 
     pedido_id = nuevo.data[0]["id"]
 
-    # Insertar TODOS los items en una sola llamada (batch)
     detalle_rows = [{
         "pedido_id": pedido_id,
         "producto_id": item.producto_id,
+        "nivel_id": item.nivel_id,
         "cantidad": item.cantidad,
         "precio_venta": item.precio_venta
     } for item in pedido.items]
@@ -94,7 +105,7 @@ def descargar_pdf_pedido(pedido_id: int):
     p = pedido.data[0]
 
     detalle = supabase.table("detalle_pedidos")\
-        .select("*, productos(nombre)")\
+        .select("*, productos(nombre), producto_niveles(nivel)")\
         .eq("pedido_id", pedido_id).execute()
 
     pdf = FPDF(format="A5")
@@ -113,7 +124,7 @@ def descargar_pdf_pedido(pedido_id: int):
     pdf.set_y(32)
     pdf.set_text_color(60, 60, 60)
     pdf.set_font("Helvetica", "", 8)
-    pdf.cell(0, 6, f"N° Pedido: {p['numero']}", ln=True)
+    pdf.cell(0, 6, f"N. Pedido: {p['numero']}", ln=True)
     pdf.cell(0, 6, f"Cliente: {p['cliente']}", ln=True)
     pdf.cell(0, 6, f"Vendedor: {p.get('vendedor', '-')}", ln=True)
     pdf.cell(0, 6, f"Fecha: {p['fecha'][:10]}", ln=True)
@@ -125,22 +136,25 @@ def descargar_pdf_pedido(pedido_id: int):
     pdf.set_fill_color(255, 235, 210)
     pdf.set_text_color(150, 60, 0)
     pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(ancho * 0.6, 7, "PRODUCTO", fill=True)
-    pdf.cell(ancho * 0.2, 7, "CANT.", fill=True, align="C")
+    pdf.cell(ancho * 0.45, 7, "PRODUCTO", fill=True)
+    pdf.cell(ancho * 0.2, 7, "NIVEL", fill=True, align="C")
+    pdf.cell(ancho * 0.15, 7, "CANT.", fill=True, align="C")
     pdf.cell(ancho * 0.2, 7, "P. VENTA", fill=True, align="R", ln=True)
 
     pdf.set_text_color(40, 40, 40)
     pdf.set_font("Helvetica", "", 8)
     for d in detalle.data:
         nombre = (d.get("productos") or {}).get("nombre", "-")
-        pdf.cell(ancho * 0.6, 6, nombre[:30])
-        pdf.cell(ancho * 0.2, 6, str(d["cantidad"]), align="C")
+        nivel_nombre = (d.get("producto_niveles") or {}).get("nivel", "-")
+        pdf.cell(ancho * 0.45, 6, nombre[:24])
+        pdf.cell(ancho * 0.2, 6, nivel_nombre, align="C")
+        pdf.cell(ancho * 0.15, 6, str(d["cantidad"]), align="C")
         pdf.cell(ancho * 0.2, 6, f"Bs. {d['precio_venta']:.2f}", align="R", ln=True)
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 5, "Pedido pendiente de entrega  Almacen Gloria", ln=True, align="C")
+    pdf.cell(0, 5, "Pedido pendiente de entrega - Almacen Cori", ln=True, align="C")
 
     buffer = io.BytesIO(pdf.output())
     return StreamingResponse(
@@ -152,36 +166,30 @@ def descargar_pdf_pedido(pedido_id: int):
 
 @router.get("/{pedido_id}/nota-venta")
 def nota_venta_pdf(pedido_id: int):
-    """PDF del recibo final — solo disponible si el pedido fue entregado"""
     from fpdf import FPDF
 
-    # Obtener pedido
     pedido_result = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
     if not pedido_result.data:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
     p = pedido_result.data[0]
 
     if not p.get("venta_id"):
-        raise HTTPException(status_code=400, detail="Este pedido aún no tiene venta asociada")
+        raise HTTPException(status_code=400, detail="Este pedido aun no tiene venta asociada")
 
-    # Obtener venta
     venta_result = supabase.table("ventas").select("*").eq("id", p["venta_id"]).execute()
     if not venta_result.data:
         raise HTTPException(status_code=404, detail="Venta no encontrada")
     v = venta_result.data[0]
 
-    # Obtener detalle de venta con productos
     detalle = supabase.table("detalle_ventas")\
-        .select("*, productos(nombre)")\
+        .select("*, productos(nombre), producto_niveles(nivel)")\
         .eq("venta_id", p["venta_id"]).execute()
 
-    # ── Generar PDF ──────────────────────────────────────────────
     pdf = FPDF(format="A5")
     pdf.add_page()
     pdf.set_margins(12, 12, 12)
     ancho = pdf.w - 24
 
-    # Header naranja
     pdf.set_fill_color(255, 107, 43)
     pdf.rect(0, 0, pdf.w, 30, style="F")
     pdf.set_y(6)
@@ -191,16 +199,16 @@ def nota_venta_pdf(pedido_id: int):
     pdf.set_font("Helvetica", "", 9)
     pdf.cell(0, 6, "Nota de Venta", ln=True, align="C")
 
-    # Info
     pdf.set_y(34)
     pdf.set_text_color(60, 60, 60)
     pdf.set_font("Helvetica", "", 8)
 
     col = ancho / 2
-    pdf.cell(col, 6, f"N° Venta: {v['numero_venta']}")
+    metodo_display = "CREDITO" if v.get("es_credito") else v['metodo_pago'].upper()
+    pdf.cell(col, 6, f"N. Venta: {v['numero_venta']}")
     pdf.cell(col, 6, f"Fecha: {v['fecha'][:10]}", ln=True, align="R")
-    pdf.cell(col, 6, f"N° Pedido: {p['numero']}")
-    pdf.cell(col, 6, f"Método: {v['metodo_pago'].upper()}", ln=True, align="R")
+    pdf.cell(col, 6, f"N. Pedido: {p['numero']}")
+    pdf.cell(col, 6, f"Metodo: {metodo_display}", ln=True, align="R")
 
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(40, 40, 40)
@@ -212,34 +220,35 @@ def nota_venta_pdf(pedido_id: int):
         pdf.cell(0, 5, f"Vendedor: {p['vendedor']}", ln=True)
     pdf.ln(2)
 
-    # Línea divisora
     pdf.set_draw_color(255, 107, 43)
     pdf.set_line_width(0.5)
     pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
     pdf.ln(3)
 
-    # Cabecera tabla
     pdf.set_fill_color(255, 235, 210)
     pdf.set_text_color(150, 60, 0)
     pdf.set_font("Helvetica", "B", 8)
-    col_prod   = ancho * 0.42
+    col_prod   = ancho * 0.36
+    col_nivel  = ancho * 0.17
     col_cant   = ancho * 0.13
-    col_precio = ancho * 0.22
-    col_sub    = ancho * 0.23
+    col_precio = ancho * 0.17
+    col_sub    = ancho * 0.17
     pdf.cell(col_prod,  7, "PRODUCTO",  fill=True)
+    pdf.cell(col_nivel, 7, "NIVEL",     fill=True, align="C")
     pdf.cell(col_cant,  7, "CANT.",     fill=True, align="C")
     pdf.cell(col_precio,7, "P.UNIT.",   fill=True, align="R")
     pdf.cell(col_sub,   7, "SUBTOTAL",  fill=True, align="R", ln=True)
 
-    # Filas productos
     pdf.set_text_color(40, 40, 40)
     pdf.set_font("Helvetica", "", 8)
     fill = False
     for d in detalle.data:
-        nombre = (d.get("productos") or {}).get("nombre", "—")
+        nombre = (d.get("productos") or {}).get("nombre", "-")
+        nivel_nombre = (d.get("producto_niveles") or {}).get("nivel", "-")
         sub = float(d["subtotal"])
         pdf.set_fill_color(252, 248, 244) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(col_prod,  6, nombre[:28],                          fill=True)
+        pdf.cell(col_prod,  6, nombre[:22],                          fill=True)
+        pdf.cell(col_nivel, 6, nivel_nombre,                         fill=True, align="C")
         pdf.cell(col_cant,  6, str(d["cantidad"]),                   fill=True, align="C")
         pdf.cell(col_precio,6, f"Bs. {float(d['precio_unitario']):.2f}", fill=True, align="R")
         pdf.cell(col_sub,   6, f"Bs. {sub:.2f}",                    fill=True, align="R", ln=True)
@@ -251,15 +260,23 @@ def nota_venta_pdf(pedido_id: int):
     pdf.line(12, pdf.get_y(), pdf.w - 12, pdf.get_y())
     pdf.ln(3)
 
-    # Total
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(255, 107, 43)
     pdf.cell(ancho - col_sub, 8, "TOTAL PAGADO:", align="R")
     pdf.set_text_color(40, 40, 40)
     pdf.cell(col_sub, 8, f"Bs. {float(v['total']):.2f}", align="R", ln=True)
 
-    # Cambio si hubo
-    if v.get("cambio") and float(v["cambio"]) > 0:
+    if v.get("es_credito"):
+        pagado = float(v.get("monto_recibido") or 0)
+        pendiente = max(0.0, float(v["total"]) - pagado)
+        pdf.set_font("Helvetica", "", 8)
+        pdf.set_text_color(100, 100, 100)
+        pdf.cell(ancho - col_sub, 6, "Pagado ahora:", align="R")
+        pdf.cell(col_sub, 6, f"Bs. {pagado:.2f}", align="R", ln=True)
+        pdf.set_text_color(200, 0, 0)
+        pdf.cell(ancho - col_sub, 6, "Queda a credito:", align="R")
+        pdf.cell(col_sub, 6, f"Bs. {pendiente:.2f}", align="R", ln=True)
+    elif v.get("cambio") and float(v["cambio"]) > 0:
         pdf.set_font("Helvetica", "", 8)
         pdf.set_text_color(100, 100, 100)
         pdf.cell(ancho - col_sub, 6, "Cambio:", align="R")
@@ -273,8 +290,8 @@ def nota_venta_pdf(pedido_id: int):
 
     pdf.set_font("Helvetica", "I", 8)
     pdf.set_text_color(120, 120, 120)
-    pdf.cell(0, 5, "¡Gracias por su compra!", ln=True, align="C")
-    pdf.cell(0, 5, "Almacen Cori Su tienda de confianza", ln=True, align="C")
+    pdf.cell(0, 5, "Gracias por su compra!", ln=True, align="C")
+    pdf.cell(0, 5, "Almacen Cori - Su tienda de confianza", ln=True, align="C")
 
     buffer = io.BytesIO(pdf.output())
     return StreamingResponse(
@@ -284,20 +301,21 @@ def nota_venta_pdf(pedido_id: int):
     )
 
 
-# ── Rutas CON parámetros dinámicos DESPUÉS ──────────────────────────
-
 @router.get("/{pedido_id}")
 def get_pedido(pedido_id: int):
-    pedido = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
+    pedido = supabase.table("pedidos")\
+        .select("*, clientes(nombre, saldo_pendiente, limite_credito)")\
+        .eq("id", pedido_id).execute()
     if not pedido.data:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
 
     detalle = supabase.table("detalle_pedidos")\
-        .select("*, productos(nombre, codigo, precio_venta)")\
+        .select("*, productos(nombre, codigo, precio_venta), producto_niveles(nivel, precio_venta, precio_compra, stock)")\
         .eq("pedido_id", pedido_id)\
         .execute()
 
-    return {**pedido.data[0], "items": detalle.data}
+    resultado = _adjuntar_cliente_registrado(pedido.data)[0]
+    return {**resultado, "items": detalle.data}
 
 
 @router.put("/{pedido_id}/cancelar")
@@ -314,13 +332,35 @@ def cancelar_pedido(pedido_id: int):
 
 @router.put("/{pedido_id}/entregar")
 def entregar_pedido(pedido_id: int, data: dict):
+    """
+    data: {
+      metodo_pago, monto_recibido, es_credito (bool),
+      items: [{ producto_id, nivel_id, cantidad, precio_venta, precio_compra?, subtotal }]
+    }
+    """
     pedido = supabase.table("pedidos").select("*").eq("id", pedido_id).execute()
     if not pedido.data:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    p = pedido.data[0]
+
+    es_credito = data.get("es_credito", False)
+    cliente_id = p.get("cliente_id")
+
+    if es_credito:
+        if not cliente_id:
+            raise HTTPException(status_code=400, detail="Este pedido no está vinculado a un cliente registrado, no se puede entregar a crédito")
+        cliente = supabase.table("clientes").select("limite_credito").eq("id", cliente_id).execute()
+        if not cliente.data or (cliente.data[0]["limite_credito"] or 0) <= 0:
+            raise HTTPException(status_code=400, detail="Este cliente no tiene línea de crédito habilitada")
 
     numero_venta = f"V-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
     items = data.get("items", [])
     total = sum(i["subtotal"] for i in items)
+    monto_recibido = data.get("monto_recibido", total)
+
+    cambio = 0
+    if monto_recibido and not es_credito:
+        cambio = monto_recibido - total
 
     nueva_venta = supabase.table("ventas").insert({
         "numero_venta": numero_venta,
@@ -328,18 +368,20 @@ def entregar_pedido(pedido_id: int, data: dict):
         "descuento": 0,
         "total": total,
         "metodo_pago": data.get("metodo_pago", "efectivo"),
-        "monto_recibido": data.get("monto_recibido", total),
-        "cambio": data.get("monto_recibido", total) - total,
-        "notas": f"Pedido {pedido.data[0]['numero']}",
-        "estado": "completada"
+        "monto_recibido": monto_recibido,
+        "cambio": cambio,
+        "notas": f"Pedido {p['numero']}",
+        "estado": "completada",
+        "cliente_id": cliente_id,
+        "es_credito": es_credito
     }).execute()
 
     venta_id = nueva_venta.data[0]["id"]
 
-    # Insertar TODO el detalle de venta en una sola llamada (batch)
     detalle_rows = [{
         "venta_id": venta_id,
         "producto_id": item["producto_id"],
+        "nivel_id": item["nivel_id"],
         "cantidad": item["cantidad"],
         "precio_unitario": item["precio_venta"],
         "precio_compra": item.get("precio_compra", 0),
@@ -348,10 +390,19 @@ def entregar_pedido(pedido_id: int, data: dict):
     if detalle_rows:
         supabase.table("detalle_ventas").insert(detalle_rows).execute()
 
-    # Descontar stock + registrar movimientos en 1 sola llamada RPC
-    items_json = [{"producto_id": item["producto_id"], "cantidad": item["cantidad"]} for item in items]
+    items_json = [{"nivel_id": item["nivel_id"], "cantidad": item["cantidad"]} for item in items]
     if items_json:
-        supabase.rpc("procesar_venta", {"p_items": items_json}).execute()
+        supabase.rpc("procesar_venta_niveles", {"p_items": items_json}).execute()
+
+    if es_credito and cliente_id:
+        saldo_credito = max(0, total - monto_recibido)
+        if saldo_credito > 0:
+            supabase.rpc("registrar_cargo_cliente", {
+                "p_cliente_id": cliente_id,
+                "p_monto": saldo_credito,
+                "p_motivo": f"Pedido entregado {p['numero']}",
+                "p_venta_id": venta_id
+            }).execute()
 
     supabase.table("pedidos").update({
         "estado": "entregado",
@@ -366,7 +417,7 @@ def editar_pedido(pedido_id: int, data: dict):
     """
     data: {
         "notas": str (opcional),
-        "items": [{ producto_id, cantidad, precio_venta }]
+        "items": [{ producto_id, nivel_id, cantidad, precio_venta }]
     }
     """
     pedido = supabase.table("pedidos").select("estado").eq("id", pedido_id).execute()
@@ -375,22 +426,20 @@ def editar_pedido(pedido_id: int, data: dict):
     if pedido.data[0]["estado"] != "pendiente":
         raise HTTPException(status_code=400, detail="Solo se pueden editar pedidos pendientes")
 
-    # Actualizar notas si vienen
     update_data = {}
     if "notas" in data:
         update_data["notas"] = data["notas"]
     if update_data:
         supabase.table("pedidos").update(update_data).eq("id", pedido_id).execute()
 
-    # Borrar items anteriores y reemplazar con los nuevos
     supabase.table("detalle_pedidos").delete().eq("pedido_id", pedido_id).execute()
 
     items = data.get("items", [])
     if items:
-        # Insertar TODOS los items nuevos en una sola llamada (batch)
         detalle_rows = [{
             "pedido_id": pedido_id,
             "producto_id": item["producto_id"],
+            "nivel_id": item["nivel_id"],
             "cantidad": item["cantidad"],
             "precio_venta": item["precio_venta"]
         } for item in items]

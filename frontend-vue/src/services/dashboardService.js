@@ -16,6 +16,10 @@ const dashboardService = {
   async getStockCritico() {
     const res = await api.get('/dashboard/stock-critico');
     return res.data;
+  },
+  async getCuentasPorCobrar() {
+    const res = await api.get('/dashboard/cuentas-por-cobrar');
+    return res.data;
   }
   // getTopProductos() eliminado
 };

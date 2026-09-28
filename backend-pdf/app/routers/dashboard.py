@@ -46,10 +46,15 @@ def get_resumen():
             agrupado[pid]["ingresos"] += d["subtotal"]
         top_productos = sorted(agrupado.values(), key=lambda x: x["unidades"], reverse=True)[:5]
 
-    # 3. Stock crítico (no se puede combinar con lo anterior, tabla distinta)
-    productos = supabase.table("productos").select("stock, stock_minimo")\
+    # 3. Stock crítico — calculado sobre los NIVELES (jaba/caja/paquete), no sobre productos
+    niveles = supabase.table("producto_niveles").select("stock, stock_minimo")\
         .eq("activo", True).execute().data
-    criticos = sum(1 for p in productos if p["stock"] <= p["stock_minimo"])
+    criticos = sum(1 for n in niveles if n["stock_minimo"] > 0 and n["stock"] <= n["stock_minimo"])
+
+    # 4. Cuentas por cobrar — foto actual, no depende del rango de fechas
+    clientes_con_deuda = supabase.table("clientes").select("saldo_pendiente")\
+        .gt("saldo_pendiente", 0).eq("activo", True).execute().data
+    total_por_cobrar = sum(c["saldo_pendiente"] for c in clientes_con_deuda)
 
     total_hoy = sum(v["total"] for v in ventas_hoy)
     total_ayer = sum(v["total"] for v in ventas_ayer)
@@ -64,8 +69,12 @@ def get_resumen():
         "transacciones_mes": len(ventas_mes),
         "ganancia_neta_mes": ganancia_neta,
         "productos_criticos": criticos,
-        "top_productos": top_productos,   # ← nuevo, antes era un endpoint aparte
+        "top_productos": top_productos,
+        "total_por_cobrar": total_por_cobrar,
+        "clientes_con_deuda": len(clientes_con_deuda),
     }
+
+
 @router.get("/ventas-semana")
 def get_ventas_semana():
     hoy = date.today()
@@ -77,7 +86,6 @@ def get_ventas_semana():
         .gte("fecha", ini).lte("fecha", fin)\
         .eq("estado", "completada").execute()
 
-    # Agrupar en Python (rápido, ya no toca disco)
     resultado = []
     for i in range(6, -1, -1):
         d = hoy - timedelta(days=i)
@@ -89,6 +97,7 @@ def get_ventas_semana():
             "cantidad": len(ventas_dia)
         })
     return resultado
+
 
 @router.get("/top-productos")
 def get_top_productos():
@@ -121,26 +130,46 @@ def get_top_productos():
 
 @router.get("/ultimas-ventas")
 def get_ultimas_ventas():
-    result = supabase.table("ventas").select("*")\
+    result = supabase.table("ventas").select("*, clientes(nombre)")\
         .eq("estado", "completada")\
         .order("fecha", desc=True)\
         .limit(5).execute()
-    return result.data
+
+    ventas = []
+    for v in result.data:
+        row = {**v}
+        row["cliente_nombre"] = (v.get("clientes") or {}).get("nombre")
+        row.pop("clientes", None)
+        ventas.append(row)
+    return ventas
 
 
 @router.get("/stock-critico")
 def get_stock_critico():
-    result = supabase.table("productos")\
-        .select("nombre, stock, stock_minimo, categorias(nombre)")\
+    result = supabase.table("producto_niveles")\
+        .select("nivel, stock, stock_minimo, productos(nombre, categorias(nombre))")\
         .eq("activo", True).execute()
-    criticos = [
-        {
-            "nombre": p["nombre"],
-            "stock": p["stock"],
-            "stock_minimo": p["stock_minimo"],
-            "categoria": (p.get("categorias") or {}).get("nombre", "—"),
-            "faltante": p["stock_minimo"] - p["stock"]
-        }
-        for p in result.data if p["stock"] <= p["stock_minimo"]
-    ]
+
+    criticos = []
+    for n in result.data:
+        if n["stock_minimo"] > 0 and n["stock"] <= n["stock_minimo"]:
+            prod = n.get("productos") or {}
+            criticos.append({
+                "nombre": prod.get("nombre", "Desconocido"),
+                "nivel": n["nivel"],
+                "stock": n["stock"],
+                "stock_minimo": n["stock_minimo"],
+                "categoria": (prod.get("categorias") or {}).get("nombre", "—"),
+                "faltante": n["stock_minimo"] - n["stock"]
+            })
     return sorted(criticos, key=lambda x: x["stock"])[:5]
+
+
+@router.get("/cuentas-por-cobrar")
+def get_cuentas_por_cobrar():
+    result = supabase.table("clientes")\
+        .select("id, nombre, telefono, saldo_pendiente, limite_credito")\
+        .gt("saldo_pendiente", 0).eq("activo", True)\
+        .order("saldo_pendiente", desc=True)\
+        .limit(5).execute()
+    return result.data

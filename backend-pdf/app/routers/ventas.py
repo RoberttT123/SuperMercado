@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.supabase_client import supabase
+from app.core import historial
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -164,7 +165,7 @@ def get_detalle_venta(venta_id: int):
 
 
 @router.put("/{venta_id}/anular")
-def anular_venta(venta_id: int):
+def anular_venta(venta_id: int, request: Request):
     venta = supabase.table("ventas")\
         .select("*")\
         .eq("id", venta_id)\
@@ -203,6 +204,13 @@ def anular_venta(venta_id: int):
         .eq("id", venta_id)\
         .execute()
 
+    historial.registrar(
+        request, "venta_anulada",
+        f"Venta #{venta_data['numero_venta']} · Total {historial.bs(venta_data.get('total'))} · "
+        f"{len(detalle.data or [])} producto(s) devueltos al stock",
+        modulo="ventas",
+        datos={"venta_id": venta_id, "numero_venta": venta_data["numero_venta"], "total": venta_data.get("total")},
+    )
     return {"success": True, "mensaje": "Venta anulada y stock revertido"}
 
 

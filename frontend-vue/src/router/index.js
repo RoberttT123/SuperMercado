@@ -48,6 +48,13 @@ const router = createRouter({
       component: () => import('../views/PosView.vue'),
       meta: { requiereAuth: true, roles: ['admin', 'cajero'] }
     },
+    // ── SOLO ADMIN ───────────────────────────────────
+    {
+      path: '/historial',
+      name: 'historial',
+      component: () => import('../views/HistorialView.vue'),
+      meta: { requiereAuth: true, roles: ['admin'] }
+    },
     // ── TODOS LOS ROLES ──────────────────────────────
     {
       path: '/clientes',

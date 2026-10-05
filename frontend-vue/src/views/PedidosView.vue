@@ -674,6 +674,7 @@
 </template>
 
 <script setup>
+import { formatoFechaHora } from '@/lib/fechas'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import pedidosService from '@/services/pedidosService'
@@ -1056,7 +1057,7 @@ const cargarDetalleHistorial = async (id) => {
 // ── UTILIDADES ───────────────────────────────────────────────────────
 const formatoFecha = (f) => {
   if (!f) return '—'
-  return new Date(f).toLocaleString('es-BO', {
+  return formatoFechaHora(f, {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
   })

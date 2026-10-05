@@ -45,6 +45,10 @@
           />
         </div>
 
+        <div v-if="aviso && !errorMessage" class="text-sm text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">
+          {{ aviso }}
+        </div>
+
         <div v-if="errorMessage" class="text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 text-center">
           {{ errorMessage }}
         </div>
@@ -61,7 +65,7 @@
   </div>
 </template>
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/authStore' // ← store, no service directo
 
@@ -75,6 +79,13 @@ const errorMessage = ref('')
 const hasLogo = ref(true)
 
 const handleImageError = () => { hasLogo.value = false }
+
+// Si llegó aquí porque su sesión venció, se le explica en vez de solo mostrar el login
+const aviso = ref('')
+onMounted(() => {
+  aviso.value = sessionStorage.getItem('avisoLogin') || ''
+  sessionStorage.removeItem('avisoLogin')
+})
 
 const handleLogin = async () => {
   isLoading.value = true

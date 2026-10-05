@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Request
 from app.supabase_client import supabase
 from app.core import historial
+from app.core.auth import SOLO_GESTION
+from app.core.fechas import ahora_bolivia
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid
-from datetime import datetime
 
 router = APIRouter(prefix="/inventario", tags=["Inventario"])
 
@@ -87,7 +88,7 @@ def buscar_producto(codigo: Optional[str] = None, nombre: Optional[str] = None):
     return _adjuntar_niveles(result.data)
 
 
-@router.post("/productos")
+@router.post("/productos", dependencies=SOLO_GESTION)
 def create_producto(producto: ProductoCreate, request: Request):
     data = producto.model_dump(exclude={"niveles"})
     result = supabase.table("productos").insert(data).execute()
@@ -121,7 +122,7 @@ def create_producto(producto: ProductoCreate, request: Request):
     return nuevo
 
 
-@router.put("/productos/{producto_id}")
+@router.put("/productos/{producto_id}", dependencies=SOLO_GESTION)
 def update_producto(producto_id: int, producto: ProductoUpdate, request: Request):
     data = producto.model_dump(exclude_unset=True)
     antes = supabase.table("productos").select("nombre, categoria_id, descripcion")\
@@ -134,7 +135,7 @@ def update_producto(producto_id: int, producto: ProductoUpdate, request: Request
     return result.data[0]
 
 
-@router.post("/productos/{producto_id}/niveles")
+@router.post("/productos/{producto_id}/niveles", dependencies=SOLO_GESTION)
 def agregar_nivel(producto_id: int, nivel: NivelInput, request: Request):
     existe = supabase.table("productos").select("id, nombre").eq("id", producto_id).execute()
     if not existe.data:
@@ -155,7 +156,7 @@ def agregar_nivel(producto_id: int, nivel: NivelInput, request: Request):
     return creado
 
 
-@router.put("/niveles/{nivel_id}")
+@router.put("/niveles/{nivel_id}", dependencies=SOLO_GESTION)
 def editar_nivel(nivel_id: int, nivel: NivelUpdate, request: Request):
     data = nivel.model_dump(exclude_unset=True)
     antes = supabase.table("producto_niveles").select("*, productos(nombre)").eq("id", nivel_id).execute().data
@@ -167,7 +168,7 @@ def editar_nivel(nivel_id: int, nivel: NivelUpdate, request: Request):
     return result.data[0]
 
 
-@router.delete("/niveles/{nivel_id}")
+@router.delete("/niveles/{nivel_id}", dependencies=SOLO_GESTION)
 def eliminar_nivel(nivel_id: int, request: Request):
     result = supabase.table("producto_niveles").update({"activo": False}).eq("id", nivel_id).execute()
     if not result.data:
@@ -181,7 +182,7 @@ def eliminar_nivel(nivel_id: int, request: Request):
     return {"success": True}
 
 
-@router.put("/niveles/{nivel_id}/ajuste-stock")
+@router.put("/niveles/{nivel_id}/ajuste-stock", dependencies=SOLO_GESTION)
 def ajustar_stock_nivel(nivel_id: int, data: dict, request: Request):
     nivel_db = supabase.table("producto_niveles").select("stock, producto_id, nivel, productos(nombre)").eq("id", nivel_id).execute()
     if not nivel_db.data:
@@ -217,7 +218,7 @@ def ajustar_stock_nivel(nivel_id: int, data: dict, request: Request):
     return {"success": True, "stock_anterior": stock_actual, "stock_nuevo": nuevo_stock}
 
 
-@router.get("/productos/{producto_id}/movimientos")
+@router.get("/productos/{producto_id}/movimientos", dependencies=SOLO_GESTION)
 def get_movimientos(producto_id: int):
     return supabase.table("inventario_movimientos")\
         .select("*, producto_niveles(nivel)")\
@@ -225,9 +226,9 @@ def get_movimientos(producto_id: int):
         .order("fecha", desc=True).limit(50).execute().data
 
 
-@router.post("/compras")
+@router.post("/compras", dependencies=SOLO_GESTION)
 def registrar_compra(data: dict, request: Request):
-    numero = f"C-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
+    numero = f"C-{ahora_bolivia().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
     total = sum(item["subtotal"] for item in data["items"])
 
     compra = supabase.table("compras").insert({
@@ -268,7 +269,7 @@ def registrar_compra(data: dict, request: Request):
     return {"success": True, "numero_compra": numero, "total": total}
 
 
-@router.get("/compras/{compra_id}/detalle")
+@router.get("/compras/{compra_id}/detalle", dependencies=SOLO_GESTION)
 def get_detalle_compra(compra_id: int):
     result = supabase.table("detalle_compras")\
         .select("*, productos(nombre, codigo), producto_niveles(nivel)")\

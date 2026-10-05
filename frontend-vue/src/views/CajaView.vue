@@ -226,6 +226,7 @@
 </template>
 
 <script setup>
+import { formatoFechaHora, diaBolivia, diasEntre } from '@/lib/fechas'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useCajaStore } from '@/stores/cajaStore'
@@ -269,17 +270,11 @@ const diferencia = computed(() =>
 
 const cajaAbiertaOtroDia = computed(() => {
   if (!cajaStore.cajaActiva?.fecha_apertura) return false
-  const apertura = new Date(cajaStore.cajaActiva.fecha_apertura)
-  const hoy = new Date()
-  return apertura.toDateString() !== hoy.toDateString()
+  return diaBolivia(cajaStore.cajaActiva.fecha_apertura) !== diaBolivia()
 })
 const diasCajaAbierta = computed(() => {
   if (!cajaStore.cajaActiva?.fecha_apertura) return 0
-  const apertura = new Date(cajaStore.cajaActiva.fecha_apertura)
-  apertura.setHours(0, 0, 0, 0)
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-  return Math.round((hoy - apertura) / (1000 * 60 * 60 * 24))
+  return diasEntre(diaBolivia(cajaStore.cajaActiva.fecha_apertura), diaBolivia())
 })
 
 // ── AUTO-REFRESH ─────────────────────────────────────────────────────
@@ -404,7 +399,7 @@ const cerrarCaja = async () => {
 // ── UTILIDADES ───────────────────────────────────────────────────────
 const formatoFecha = (f) => {
   if (!f) return '—'
-  return new Date(f).toLocaleString('es-BO', {
+  return formatoFechaHora(f, {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
   })

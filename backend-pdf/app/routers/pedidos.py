@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from app.supabase_client import supabase
+from app.core.fechas import ahora_bolivia, texto_fecha
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -68,7 +69,7 @@ def get_historial(vendedor: Optional[str] = None):
 
 @router.post("/")
 def crear_pedido(pedido: PedidoCreate):
-    numero = f"P-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
+    numero = f"P-{ahora_bolivia().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
 
     nuevo = supabase.table("pedidos").insert({
         "numero": numero,
@@ -127,7 +128,7 @@ def descargar_pdf_pedido(pedido_id: int):
     pdf.cell(0, 6, f"N. Pedido: {p['numero']}", ln=True)
     pdf.cell(0, 6, f"Cliente: {p['cliente']}", ln=True)
     pdf.cell(0, 6, f"Vendedor: {p.get('vendedor', '-')}", ln=True)
-    pdf.cell(0, 6, f"Fecha: {p['fecha'][:10]}", ln=True)
+    pdf.cell(0, 6, f"Fecha: {texto_fecha(p['fecha'], con_hora=True)}", ln=True)
     if p.get("notas"):
         pdf.cell(0, 6, f"Notas: {p['notas']}", ln=True)
     pdf.ln(3)
@@ -206,7 +207,7 @@ def nota_venta_pdf(pedido_id: int):
     col = ancho / 2
     metodo_display = "CREDITO" if v.get("es_credito") else v['metodo_pago'].upper()
     pdf.cell(col, 6, f"N. Venta: {v['numero_venta']}")
-    pdf.cell(col, 6, f"Fecha: {v['fecha'][:10]}", ln=True, align="R")
+    pdf.cell(col, 6, f"Fecha: {texto_fecha(v['fecha'], con_hora=True)}", ln=True, align="R")
     pdf.cell(col, 6, f"N. Pedido: {p['numero']}")
     pdf.cell(col, 6, f"Metodo: {metodo_display}", ln=True, align="R")
 
@@ -353,7 +354,7 @@ def entregar_pedido(pedido_id: int, data: dict):
         if not cliente.data or (cliente.data[0]["limite_credito"] or 0) <= 0:
             raise HTTPException(status_code=400, detail="Este cliente no tiene línea de crédito habilitada")
 
-    numero_venta = f"V-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
+    numero_venta = f"V-{ahora_bolivia().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
     items = data.get("items", [])
     total = sum(i["subtotal"] for i in items)
     monto_recibido = data.get("monto_recibido", total)

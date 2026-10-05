@@ -147,7 +147,7 @@
                     :class="{'bg-orange-50': ventaSeleccionada?.id === v.id}"
                   >
                     <td class="py-3 font-bold text-[#FF6B2B]">{{ v.numero_venta }}</td>
-                    <td class="py-3 text-sm">{{ v.fecha.slice(0, 10) }}</td>                    <td class="py-3 text-sm">
+                    <td class="py-3 text-sm">{{ diaBolivia(v.fecha) }}</td>                    <td class="py-3 text-sm">
                       {{ v.cliente_nombre || 'Consumidor final' }}
                       <span v-if="v.es_credito" class="ml-1 text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-bold">CRÉDITO</span>
                     </td>
@@ -310,7 +310,7 @@
                     :class="{'bg-orange-50': compraSeleccionada?.id === c.id}">
                     <td class="py-3 font-bold text-[#FF6B2B]">{{ c.numero_compra }}</td>
                     <td class="py-3 text-sm">{{ c.proveedor_nombre }}</td>
-                    <td class="py-3 text-sm">{{ c.fecha.slice(0, 10) }}</td>
+                    <td class="py-3 text-sm">{{ diaBolivia(c.fecha) }}</td>
                     <td class="py-3 font-bold">Bs. {{ c.total.toFixed(2) }}</td>
                   </tr>
                 </tbody>
@@ -349,6 +349,7 @@
 </template>
 
 <script setup>
+import { diaBolivia } from '@/lib/fechas'
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import reportesService from '@/services/reportesService'
@@ -384,7 +385,7 @@ const compraSeleccionada = ref(null)
 const kpisCompras = ref({ totalCompras: 0, totalGastado: 0 })
 
 const formatearFecha = (fecha) => {
-  return fecha.toISOString().split('T')[0]
+  return diaBolivia(fecha)
 }
 
 const calcularFechasPorPeriodo = () => {

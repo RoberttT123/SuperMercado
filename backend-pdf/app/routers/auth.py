@@ -14,7 +14,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
             .select("*")\
             .eq("username", form_data.username)\
             .execute()
-        print(f"📦 Resultado BD: {result.data}")
     except Exception as e:
         print(f"❌ Error BD: {e}")
         raise HTTPException(status_code=500, detail=f"Error BD: {str(e)}")
@@ -25,7 +24,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     user = result.data[0]
     print(f"✅ Usuario encontrado: {user['username']} / role: {user['role']}")
-    print(f"🔑 Hash en BD: {user.get('hashed_password', 'VACIO')[:20]}...")
 
     if not user.get("hashed_password"):
         raise HTTPException(status_code=500, detail="Usuario sin contraseña configurada")

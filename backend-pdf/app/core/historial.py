@@ -4,22 +4,16 @@ Historial de movimientos (bitácora de auditoría).
 Registra quién hizo qué y cuándo en las operaciones que tocan el catálogo,
 los precios y el stock. Solo el admin puede consultarlo (ver routers/historial.py).
 
-Sobre el token: el resto de la API todavía no exige el JWT, así que aquí solo
-se LEE para saber quién hace cada operación. Se verifica la firma (nadie puede
-hacerse pasar por otro usuario) pero no la expiración, para no cortar las
-sesiones largas que el resto del sistema hoy sí acepta.
+Quién hizo cada operación lo sabe app/core/auth.py, que valida la sesión en
+todas las rutas y deja el usuario en request.state.usuario.
 """
-from datetime import timezone, timedelta
 from typing import Optional
 
-from fastapi import Request, HTTPException
-from jose import jwt, JWTError
+from fastapi import Request
 
 from app.supabase_client import supabase
-from app.core.security import SECRET_KEY, ALGORITHM
 
 TABLA = "historial_movimientos"
-ZONA_BOLIVIA = timezone(timedelta(hours=-4))  # Bolivia no tiene horario de verano
 
 ETIQUETAS = {
     "producto_creado": "Producto creado",
@@ -35,32 +29,6 @@ ETIQUETAS = {
 }
 
 
-# ── Identidad del usuario ────────────────────────────────────────────
-
-def usuario_desde_request(request: Request) -> Optional[dict]:
-    auth = request.headers.get("authorization") or ""
-    if not auth.lower().startswith("bearer "):
-        return None
-    token = auth.split(" ", 1)[1].strip()
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_exp": False})
-    except JWTError:
-        return None
-    if not payload.get("sub"):
-        return None
-    return {"username": payload["sub"], "role": payload.get("role")}
-
-
-def requiere_admin(request: Request) -> dict:
-    """Dependencia de FastAPI: deja pasar solo al admin."""
-    usuario = usuario_desde_request(request)
-    if not usuario:
-        raise HTTPException(status_code=401, detail="Sesión no válida, vuelve a iniciar sesión")
-    if usuario.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Solo el administrador puede ver el historial")
-    return usuario
-
-
 # ── Registro ─────────────────────────────────────────────────────────
 
 def registrar_varios(request: Request, movimientos: list) -> None:
@@ -73,7 +41,7 @@ def registrar_varios(request: Request, movimientos: list) -> None:
     if not movimientos:
         return
     try:
-        usuario = usuario_desde_request(request) or {}
+        usuario = getattr(request.state, "usuario", None) or {}
         filas = [{
             "usuario": usuario.get("username") or "desconocido",
             "rol": usuario.get("role"),

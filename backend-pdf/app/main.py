@@ -1,11 +1,24 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
 from app.routers import auth, inventario, ventas, categoria, reportes, caja, dashboard, proveedores, pedidos, clientes, historial
+from app.core.auth import solo, ADMIN, VENDEDOR, TODOS, GESTION, CABECERA_TOKEN_NUEVO
 app = FastAPI()
 
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+
+
+# Si la sesión se renovó durante esta petición (ver app/core/auth.py),
+# se manda el token nuevo al navegador en una cabecera.
+@app.middleware("http")
+async def entregar_token_renovado(request: Request, call_next):
+    response = await call_next(request)
+    token_nuevo = getattr(request.state, "token_renovado", None)
+    if token_nuevo:
+        response.headers[CABECERA_TOKEN_NUEVO] = token_nuevo
+    return response
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,6 +26,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[CABECERA_TOKEN_NUEVO],  # sin esto el navegador no deja leer el token renovado
 )
 
 
@@ -37,14 +51,22 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(auth.router)
-app.include_router(inventario.router)
-app.include_router(categoria.router)
-app.include_router(proveedores.router)
-app.include_router(ventas.router)
-app.include_router(reportes.router)
-app.include_router(caja.router)
-app.include_router(dashboard.router)
-app.include_router(pedidos.router)
-app.include_router(clientes.router)
-app.include_router(historial.router)
+# ── Quién puede usar cada módulo ──────────────────────────────────────
+# Todo exige sesión iniciada, salvo /auth/login y /health.
+# Dentro de algunos módulos hay acciones con una regla más estricta
+# (ej. en Inventario el vendedor solo puede ver productos, no modificarlos).
+def acceso(*roles):
+    return [Depends(solo(*roles))]
+
+
+app.include_router(auth.router)                                         # público: login
+app.include_router(dashboard.router, dependencies=acceso(*GESTION))
+app.include_router(caja.router, dependencies=acceso(*GESTION))
+app.include_router(ventas.router, dependencies=acceso(*GESTION))
+app.include_router(reportes.router, dependencies=acceso(*GESTION))
+app.include_router(proveedores.router, dependencies=acceso(*GESTION))
+app.include_router(categoria.router, dependencies=acceso(*GESTION))
+app.include_router(inventario.router, dependencies=acceso(*TODOS))      # escrituras: solo admin/cajero
+app.include_router(clientes.router, dependencies=acceso(*TODOS))        # borrar: solo admin/cajero
+app.include_router(pedidos.router, dependencies=acceso(ADMIN, VENDEDOR))
+app.include_router(historial.router, dependencies=acceso(ADMIN))

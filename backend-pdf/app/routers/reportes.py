@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from app.supabase_client import supabase
 from datetime import datetime, date
+from app.core.fechas import desde_utc, hasta_utc, dia_bolivia
 import io
 
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
@@ -10,8 +11,8 @@ router = APIRouter(prefix="/reportes", tags=["Reportes"])
 def get_ventas_en_rango(inicio: str, fin: str):
     return supabase.table("ventas")\
         .select("*, clientes(nombre)")\
-        .gte("fecha", f"{inicio}T00:00:00")\
-        .lte("fecha", f"{fin}T23:59:59")\
+        .gte("fecha", desde_utc(inicio))\
+        .lte("fecha", hasta_utc(fin))\
         .eq("estado", "completada")\
         .execute()
 
@@ -19,8 +20,8 @@ def get_ventas_en_rango(inicio: str, fin: str):
 def get_compras_en_rango(inicio: str, fin: str):
     return supabase.table("compras")\
         .select("*, proveedores(nombre)")\
-        .gte("fecha", f"{inicio}T00:00:00")\
-        .lte("fecha", f"{fin}T23:59:59")\
+        .gte("fecha", desde_utc(inicio))\
+        .lte("fecha", hasta_utc(fin))\
         .order("fecha", desc=True)\
         .execute()
 
@@ -56,8 +57,8 @@ def resumen_ventas(inicio: str, fin: str):
 def lista_ventas(inicio: str, fin: str):
     result = supabase.table("ventas")\
         .select("*, clientes(nombre)")\
-        .gte("fecha", f"{inicio}T00:00:00")\
-        .lte("fecha", f"{fin}T23:59:59")\
+        .gte("fecha", desde_utc(inicio))\
+        .lte("fecha", hasta_utc(fin))\
         .order("fecha", desc=True)\
         .execute()
 
@@ -201,8 +202,8 @@ def exportar_excel(inicio: str, fin: str):
     abonos_data = supabase.table("cliente_movimientos")\
         .select("*, clientes(nombre)")\
         .eq("tipo", "abono")\
-        .gte("fecha", f"{inicio}T00:00:00")\
-        .lte("fecha", f"{fin}T23:59:59")\
+        .gte("fecha", desde_utc(inicio))\
+        .lte("fecha", hasta_utc(fin))\
         .order("fecha", desc=True)\
         .execute().data
 
@@ -237,7 +238,7 @@ def exportar_excel(inicio: str, fin: str):
         cliente_nombre = (v.get("clientes") or {}).get("nombre") or "Consumidor final"
         metodo_mostrar = "Crédito" if v.get("es_credito") else v.get("metodo_pago")
         ws1.append([
-            v["numero_venta"], v["fecha"][:10], cliente_nombre,
+            v["numero_venta"], dia_bolivia(v["fecha"]) or "", cliente_nombre,
             "Sí" if v.get("es_credito") else "No",
             metodo_mostrar, v.get("subtotal"), v.get("descuento"), v["total"], v.get("estado")
         ])
@@ -280,7 +281,7 @@ def exportar_excel(inicio: str, fin: str):
     escribir_encabezados(ws5, ["N° Compra", "Proveedor", "Fecha", "Total", "Notas"])
     for c in compras_data:
         proveedor_nombre = (c.get("proveedores") or {}).get("nombre") or "Sin proveedor"
-        ws5.append([c["numero_compra"], proveedor_nombre, c["fecha"][:10], c["total"], c.get("notas", "")])
+        ws5.append([c["numero_compra"], proveedor_nombre, dia_bolivia(c["fecha"]) or "", c["total"], c.get("notas", "")])
     autoajustar(ws5)
 
     # Hoja 6: Detalle de compras
@@ -301,7 +302,7 @@ def exportar_excel(inicio: str, fin: str):
     escribir_encabezados(ws7, ["Cliente", "Fecha", "Monto", "Motivo"])
     for a in abonos_data:
         cliente_nombre = (a.get("clientes") or {}).get("nombre") or "—"
-        ws7.append([cliente_nombre, a["fecha"][:10], a["monto"], a.get("motivo", "")])
+        ws7.append([cliente_nombre, dia_bolivia(a["fecha"]) or "", a["monto"], a.get("motivo", "")])
     autoajustar(ws7)
 
     # Hoja 8: Saldos pendientes actuales (foto del momento, no filtrado por fecha)

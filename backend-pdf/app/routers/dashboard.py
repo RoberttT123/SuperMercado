@@ -1,29 +1,34 @@
 from fastapi import APIRouter
 from app.supabase_client import supabase
-from datetime import datetime, date, timedelta
+from datetime import timedelta
+from app.core.fechas import hoy_bolivia, dia_bolivia, limites_utc, etiqueta_dia
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
+# Todos los "hoy", "ayer" y "este mes" son en hora de Bolivia (ver app/core/fechas.py).
 
-def fecha_inicio_fin(dias_atras=0):
-    d = date.today() - timedelta(days=dias_atras)
-    return f"{d}T00:00:00", f"{d}T23:59:59"
+
+def _ventas_entre(desde, hasta, campos="id, total, fecha"):
+    ini, fin = limites_utc(desde, hasta)
+    ventas = supabase.table("ventas").select(campos)\
+        .gte("fecha", ini).lte("fecha", fin)\
+        .eq("estado", "completada").execute().data
+    for v in ventas:
+        v["_dia"] = dia_bolivia(v["fecha"])
+    return ventas
 
 
 @router.get("/resumen")
 def get_resumen():
-    hoy_ini, hoy_fin = fecha_inicio_fin(0)
-    ayer_ini, ayer_fin = fecha_inicio_fin(1)
-    mes_ini = f"{date.today().year}-{date.today().month:02d}-01T00:00:00"
-    ahora = datetime.utcnow().isoformat()
+    hoy = hoy_bolivia()
+    ayer = hoy - timedelta(days=1)
+    inicio_mes = hoy.replace(day=1)
 
-    # 1. Todas las ventas del mes (cubre hoy, ayer y mes en memoria)
-    ventas_mes = supabase.table("ventas").select("id, total, fecha")\
-        .gte("fecha", mes_ini).lte("fecha", ahora)\
-        .eq("estado", "completada").execute().data
-
-    ventas_hoy = [v for v in ventas_mes if hoy_ini <= v["fecha"] <= hoy_fin]
-    ventas_ayer = [v for v in ventas_mes if ayer_ini <= v["fecha"] <= ayer_fin]
+    # 1. Ventas desde el inicio del mes (o desde ayer, si hoy es día 1) — cubre hoy, ayer y mes en memoria
+    ventas = _ventas_entre(min(inicio_mes, ayer), hoy)
+    ventas_mes = [v for v in ventas if v["_dia"] >= inicio_mes]
+    ventas_hoy = [v for v in ventas if v["_dia"] == hoy]
+    ventas_ayer = [v for v in ventas if v["_dia"] == ayer]
     venta_ids_mes = [v["id"] for v in ventas_mes]
 
     # 2. Detalle de ventas del mes — se usa para ganancia neta Y top productos
@@ -77,22 +82,15 @@ def get_resumen():
 
 @router.get("/ventas-semana")
 def get_ventas_semana():
-    hoy = date.today()
-    hace_6_dias = hoy - timedelta(days=6)
-    ini = f"{hace_6_dias}T00:00:00"
-    fin = f"{hoy}T23:59:59"
-
-    ventas = supabase.table("ventas").select("total, fecha")\
-        .gte("fecha", ini).lte("fecha", fin)\
-        .eq("estado", "completada").execute()
+    hoy = hoy_bolivia()
+    ventas = _ventas_entre(hoy - timedelta(days=6), hoy, campos="total, fecha")
 
     resultado = []
     for i in range(6, -1, -1):
         d = hoy - timedelta(days=i)
-        d_str = d.isoformat()
-        ventas_dia = [v for v in ventas.data if v["fecha"][:10] == d_str]
+        ventas_dia = [v for v in ventas if v["_dia"] == d]
         resultado.append({
-            "dia": d.strftime("%a %d"),
+            "dia": etiqueta_dia(d),
             "total": sum(v["total"] for v in ventas_dia),
             "cantidad": len(ventas_dia)
         })
@@ -101,17 +99,13 @@ def get_ventas_semana():
 
 @router.get("/top-productos")
 def get_top_productos():
-    mes_ini = f"{date.today().year}-{date.today().month:02d}-01T00:00:00"
-    ahora = datetime.utcnow().isoformat()
+    hoy = hoy_bolivia()
+    ventas = _ventas_entre(hoy.replace(day=1), hoy, campos="id, fecha")
 
-    ventas = supabase.table("ventas").select("id")\
-        .gte("fecha", mes_ini).lte("fecha", ahora)\
-        .eq("estado", "completada").execute()
-
-    if not ventas.data:
+    if not ventas:
         return []
 
-    venta_ids = [v["id"] for v in ventas.data]
+    venta_ids = [v["id"] for v in ventas]
     detalles = supabase.table("detalle_ventas")\
         .select("producto_id, cantidad, subtotal, productos(nombre)")\
         .in_("venta_id", venta_ids).execute()

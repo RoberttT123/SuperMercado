@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.supabase_client import supabase
+from app.core.auth import SOLO_GESTION
 from pydantic import BaseModel
 from typing import Optional
 
@@ -75,7 +76,7 @@ def actualizar_cliente(cliente_id: int, cliente: ClienteUpdate):
     return result.data[0]
 
 
-@router.delete("/{cliente_id}")
+@router.delete("/{cliente_id}", dependencies=SOLO_GESTION)
 def desactivar_cliente(cliente_id: int):
     result = supabase.table("clientes").update({"activo": False}).eq("id", cliente_id).execute()
     if not result.data:

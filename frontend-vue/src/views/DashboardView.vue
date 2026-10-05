@@ -270,6 +270,7 @@
 </template>
 
 <script setup>
+import { formatoFechaHora } from '@/lib/fechas'
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/authStore'
 import { useCajaStore } from '@/stores/cajaStore'
@@ -334,7 +335,7 @@ onMounted(async () => {
 
 const formatoFecha = (f) => {
   if (!f) return '—'
-  return new Date(f).toLocaleString('es-BO', {
+  return formatoFechaHora(f, {
     day: '2-digit', month: '2-digit',
     hour: '2-digit', minute: '2-digit'
   })

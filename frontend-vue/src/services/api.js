@@ -19,14 +19,28 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Mientras se usa el sistema, el backend renueva la sesión y manda el token
+// nuevo en esta cabecera; guardarlo evita que la sesión venza a mitad de turno.
+const guardarTokenRenovado = (response) => {
+  const nuevo = response?.headers?.['x-nuevo-token'];
+  if (nuevo) localStorage.setItem('token', nuevo);
+};
+
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    guardarTokenRenovado(response);
+    return response;
+  },
   (error) => {
+    guardarTokenRenovado(error.response);
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       // ✅ Usa router — funciona con hash y history mode
       if (router.currentRoute.value.name !== 'login') {
+        // El login muestra este aviso para que la persona sepa por qué volvió ahí
+        const detalle = error.response.data?.detail;
+        sessionStorage.setItem('avisoLogin', typeof detalle === 'string' ? detalle : 'Tu sesión expiró, vuelve a iniciar sesión');
         router.push('/login');
       }
     }

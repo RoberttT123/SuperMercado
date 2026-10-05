@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.supabase_client import supabase
 from app.core import historial
+from app.core.fechas import ahora_bolivia, texto_fecha
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime
 import uuid
 import io
 
@@ -62,7 +62,7 @@ def crear_venta(venta: VentaCreate):
     if venta.monto_recibido and not venta.es_credito:
         cambio = venta.monto_recibido - total
 
-    numero = f"V-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
+    numero = f"V-{ahora_bolivia().strftime('%Y%m%d')}-{str(uuid.uuid4())[:4].upper()}"
 
     # 1. Crear venta
     nueva_venta = supabase.table("ventas").insert({
@@ -251,7 +251,7 @@ def descargar_pdf_venta(venta_id: int):
     col = ancho / 2
     metodo_display = "CREDITO" if v.get("es_credito") else v['metodo_pago'].upper()
     pdf.cell(col, 6, f"N. Venta: {v['numero_venta']}")
-    pdf.cell(col, 6, f"Fecha: {v['fecha'][:10]}", ln=True, align="R")
+    pdf.cell(col, 6, f"Fecha: {texto_fecha(v['fecha'], con_hora=True)}", ln=True, align="R")
     pdf.cell(col, 6, f"Metodo: {metodo_display}")
     pdf.cell(col, 6, f"Estado: {v['estado'].upper()}", ln=True, align="R")
 

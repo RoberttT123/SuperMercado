@@ -1,6 +1,5 @@
 """Módulo Historial de movimientos — solo admin."""
 import io
-import re
 from collections import Counter
 from datetime import date, datetime, timezone
 from typing import Optional
@@ -9,9 +8,11 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from app.supabase_client import supabase
-from app.core.historial import TABLA, ETIQUETAS, ZONA_BOLIVIA, requiere_admin
+from app.core.historial import TABLA, ETIQUETAS
+from app.core.fechas import ZONA_BOLIVIA, a_bolivia, limites_utc
+from app.core.auth import solo, ADMIN
 
-router = APIRouter(prefix="/historial", tags=["Historial"], dependencies=[Depends(requiere_admin)])
+router = APIRouter(prefix="/historial", tags=["Historial"], dependencies=[Depends(solo(ADMIN))])
 
 LIMITE_PANTALLA = 1000   # filas que se muestran en la tabla (el Excel trae todo)
 PAGINA = 1000            # Supabase devuelve como máximo 1000 filas por consulta
@@ -21,13 +22,12 @@ MODULOS = {"inventario": "Inventario", "compras": "Compras", "ventas": "Ventas"}
 
 
 def _consultar(inicio: date, fin: date, usuario: Optional[str], accion: Optional[str]) -> list:
-    if fin < inicio:
-        inicio, fin = fin, inicio
+    desde_utc, hasta_utc = limites_utc(inicio, fin)
     filas, desde = [], 0
     while desde < MAXIMO:
         q = supabase.table(TABLA).select("*")\
-            .gte("fecha", f"{inicio.isoformat()}T00:00:00-04:00")\
-            .lte("fecha", f"{fin.isoformat()}T23:59:59.999-04:00")
+            .gte("fecha", desde_utc)\
+            .lte("fecha", hasta_utc)
         if usuario:
             q = q.eq("usuario", usuario)
         if accion:
@@ -51,23 +51,9 @@ def _resumen(filas: list) -> dict:
 
 
 def _hora_bolivia(iso: Optional[str]):
-    """Convierte el timestamp de Supabase (UTC) a hora de Bolivia, sin zona, para Excel.
-    Normaliza los decimales porque Python 3.10 solo acepta 3 o 6 dígitos."""
-    if not iso:
-        return None
-    m = re.match(r"^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}(?::?\d{2})?)?$", iso)
-    if not m:
-        return iso
-    dia, hora, frac, tz = m.groups()
-    frac = ((frac or ".0")[1:] + "000000")[:6]
-    if not tz or tz == "Z":
-        tz = "+00:00"
-    elif len(tz) == 3:
-        tz += ":00"
-    elif ":" not in tz:
-        tz = f"{tz[:3]}:{tz[3:]}"
-    dt = datetime.fromisoformat(f"{dia}T{hora}.{frac}{tz}")
-    return dt.astimezone(ZONA_BOLIVIA).replace(tzinfo=None)
+    """Hora de Bolivia sin zona horaria, que es lo que Excel entiende."""
+    dt = a_bolivia(iso)
+    return dt.replace(tzinfo=None) if dt else None
 
 
 @router.get("/movimientos")

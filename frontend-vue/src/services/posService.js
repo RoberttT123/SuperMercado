@@ -1,4 +1,5 @@
 import api from './api';
+import { diaBolivia } from '@/lib/fechas';
 
 const posService = {
   async buscarPorCodigo(codigo) {
@@ -17,7 +18,7 @@ const posService = {
   },
 
   async getResumenHoy() {
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = diaBolivia();
     const res = await api.get('/reportes/ventas/resumen', {
       params: { inicio: hoy, fin: hoy }
     });

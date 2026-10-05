@@ -32,7 +32,8 @@ app.add_middleware(
 
 # Endpoint liviano para el ping de mantenimiento (UptimeRobot / cron-job.org),
 # NO toca Supabase para nada — solo mantiene despierto el contenedor de Render.
-@app.get("/health")
+# Acepta HEAD porque UptimeRobot revisa así; sin esto respondía 405.
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {"status": "ok"}
 

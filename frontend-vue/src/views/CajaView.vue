@@ -353,8 +353,10 @@ const actualizarHistorial = async () => {
 
 // ── ACCIONES ─────────────────────────────────────────────────────────
 const abrirCaja = async () => {
-  if (!formApertura.value.monto || !formApertura.value.usuario) {
-    alert('⚠️ Completa el monto inicial y el nombre del cajero')
+  // 0 es válido (abrir sin cambio); solo se rechaza vacío o negativo
+  const monto = formApertura.value.monto
+  if (typeof monto !== 'number' || isNaN(monto) || monto < 0 || !formApertura.value.usuario) {
+    alert('⚠️ Ingresa un monto inicial (puede ser 0) y el nombre del cajero')
     return
   }
   cargando.value = true

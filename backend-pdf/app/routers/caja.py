@@ -75,8 +75,12 @@ def abrir_caja(data: dict):
     if activa.data:
         raise HTTPException(status_code=400, detail="Ya hay una caja abierta")
 
+    monto = data.get("monto_inicial")
+    if isinstance(monto, bool) or not isinstance(monto, (int, float)) or monto < 0:
+        raise HTTPException(status_code=400, detail="El monto inicial debe ser 0 o mayor")
+
     result = supabase.table("cajas").insert({
-        "monto_inicial": data["monto_inicial"],
+        "monto_inicial": monto,
         "usuario": data["usuario"],
         "estado": "abierta",
         "fecha_apertura": datetime.utcnow().isoformat()
